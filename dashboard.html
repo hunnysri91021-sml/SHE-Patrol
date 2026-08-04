@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard — SHE Patrol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+  .chart-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:18px;}
+  .chart-card h2{font-size:14.5px;margin:0 0 14px;color:var(--navy);}
+  .chart-wrap{position:relative;height:260px;}
+  .top-list{list-style:none;margin:0;padding:0;}
+  .top-list li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:13.5px;}
+  .top-list li:last-child{border-bottom:none;}
+  .top-list .cnt{font-weight:700;color:var(--navy);}
+</style>
+</head>
+<body>
+
+<div class="backbar"><a href="index.html">← กลับหน้าแรก</a></div>
+<div class="topbar">
+  <div>
+    <div class="co">บริษัท สยามกลการโลจิสติกส์ จำกัด · SAFETY FIRST</div>
+    <h1>Dashboard — SHE Patrol</h1>
+  </div>
+  <div class="right" id="refreshInfo"></div>
+</div>
+
+<div class="wrap">
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <div class="grid2">
+    <div class="chart-card">
+      <h2>สัดส่วนตาม Grade</h2>
+      <div class="chart-wrap"><canvas id="gradeChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h2>สัดส่วนตาม Category</h2>
+      <div class="chart-wrap"><canvas id="categoryChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="chart-card" style="margin-top:14px;">
+    <h2>อัตราปิดงานตรงเวลาต่อเดือน (%)</h2>
+    <div class="chart-wrap"><canvas id="onTimeChart"></canvas></div>
+  </div>
+
+  <div class="grid2" style="margin-top:14px;">
+    <div class="chart-card">
+      <h2>พื้นที่ที่พบปัญหาซ้ำมากที่สุด (Top 8)</h2>
+      <div class="chart-wrap"><canvas id="areaChart"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h2>สรุปตามสถานะ</h2>
+      <ul class="top-list" id="statusList"></ul>
+    </div>
+  </div>
+</div>
+
+<script src="api.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  const PALETTE = { A: "#C74E1E", B: "#B8860B", C: "#2A6FA8", Others: "#6B7580" };
+  const CAT_PALETTE = { F: "#E8622C", S: "#0F3D5C", EES: "#2F8F5B", "5S": "#B8860B" };
+
+  function isOverdue(row) { return STATUS_OPEN.includes(row.Status) && daysUntil(row.DueDate) < 0; }
+
+  function countBy(rows, keyFn) {
+    const m = {};
+    rows.forEach(r => { const k = keyFn(r); m[k] = (m[k] || 0) + 1; });
+    return m;
+  }
+
+  async function init() {
+    const rows = await SheAPI.list();
+    $("refreshInfo").textContent = "ข้อมูลทั้งหมด " + rows.length + " รายการ · โหมด " + (SheAPI.LIVE ? "SharePoint จริง" : "Demo");
+
+    const open = rows.filter(r => STATUS_OPEN.includes(r.Status));
+    const overdue = rows.filter(isOverdue);
+    const closed = rows.filter(r => r.Status === "ปิดงาน");
+    const onTimeClosed = closed.filter(r => !r.Rules_Confirmed_DateTime || new Date(r.Rules_Confirmed_DateTime) <= new Date(r.DueDate + "T23:59:59"));
+    const onTimeRate = closed.length ? Math.round((onTimeClosed.length / closed.length) * 100) : 0;
+
+    $("kpiGrid").innerHTML = `
+      <div class="kpi"><div class="label">Findings ทั้งหมด</div><div class="value">${rows.length}</div></div>
+      <div class="kpi warn"><div class="label">เปิดอยู่</div><div class="value">${open.length}</div></div>
+      <div class="kpi bad"><div class="label">เลยกำหนด SLA</div><div class="value">${overdue.length}</div></div>
+      <div class="kpi ok"><div class="label">ปิดงานตรงเวลา</div><div class="value">${onTimeRate}%</div></div>
+    `;
+
+    // Grade doughnut
+    const gradeCounts = countBy(rows, r => r.Grade);
+    new Chart($("gradeChart"), {
+      type: "doughnut",
+      data: {
+        labels: GRADE_OPTIONS,
+        datasets: [{ data: GRADE_OPTIONS.map(g => gradeCounts[g] || 0), backgroundColor: GRADE_OPTIONS.map(g => PALETTE[g]) }],
+      },
+      options: { plugins: { legend: { position: "bottom", labels: { font: { family: "Noto Sans Thai" } } } }, maintainAspectRatio: false },
+    });
+
+    // Category doughnut
+    const catCounts = countBy(rows, r => r.Category || "ไม่ระบุ");
+    const catLabels = Object.keys(catCounts);
+    new Chart($("categoryChart"), {
+      type: "doughnut",
+      data: {
+        labels: catLabels,
+        datasets: [{ data: catLabels.map(c => catCounts[c]), backgroundColor: catLabels.map(c => CAT_PALETTE[c] || "#999") }],
+      },
+      options: { plugins: { legend: { position: "bottom", labels: { font: { family: "Noto Sans Thai" } } } }, maintainAspectRatio: false },
+    });
+
+    // On-time closure rate by month
+    const months = [...new Set(rows.map(r => r.PatrolDate.slice(0, 7)))].sort();
+    const rateByMonth = months.map(m => {
+      const monthClosed = closed.filter(r => r.PatrolDate.slice(0, 7) === m);
+      if (!monthClosed.length) return null;
+      const onTime = monthClosed.filter(r => !r.Rules_Confirmed_DateTime || new Date(r.Rules_Confirmed_DateTime) <= new Date(r.DueDate + "T23:59:59"));
+      return Math.round((onTime.length / monthClosed.length) * 100);
+    });
+    new Chart($("onTimeChart"), {
+      type: "bar",
+      data: { labels: months, datasets: [{ label: "% ปิดงานตรงเวลา", data: rateByMonth, backgroundColor: "#0F3D5C", borderRadius: 6 }] },
+      options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
+    });
+
+    // Recurring problem areas (Shop + Place)
+    const areaCounts = countBy(rows, r => `${r.Shop} — ${r.Place || "ไม่ระบุจุด"}`);
+    const topAreas = Object.entries(areaCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    new Chart($("areaChart"), {
+      type: "bar",
+      data: { labels: topAreas.map(a => a[0]), datasets: [{ label: "จำนวนครั้งที่พบ", data: topAreas.map(a => a[1]), backgroundColor: "#E8622C", borderRadius: 6 }] },
+      options: { indexAxis: "y", maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } },
+    });
+
+    // Status breakdown list
+    const statusCounts = countBy(rows, r => r.Status);
+    $("statusList").innerHTML = STATUS_OPTIONS.map(s => `<li><span>${s}</span><span class="cnt">${statusCounts[s] || 0}</span></li>`).join("");
+  }
+  init();
+</script>
+
+</body>
+</html>

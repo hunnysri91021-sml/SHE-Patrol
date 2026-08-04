@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>รายการ Findings — SHE Patrol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .overdue-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--bad);margin-right:6px;}
+  .desc-cell{max-width:280px;white-space:normal;}
+</style>
+</head>
+<body>
+
+<div class="backbar"><a href="index.html">← กลับหน้าแรก</a></div>
+<div class="topbar">
+  <div>
+    <div class="co">บริษัท สยามกลการโลจิสติกส์ จำกัด · SAFETY FIRST</div>
+    <h1>รายการ Findings ทั้งหมด</h1>
+  </div>
+  <a href="new-finding.html" class="btn btn-primary" style="margin-left:auto;">+ บันทึกใหม่</a>
+</div>
+
+<div class="wrap">
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <div class="card">
+    <div class="toolbar">
+      <div class="field">
+        <label>เดือน</label>
+        <select id="fMonth"><option value="">ทั้งหมด</option></select>
+      </div>
+      <div class="field">
+        <label>Shop</label>
+        <select id="fShop"><option value="">ทั้งหมด</option></select>
+      </div>
+      <div class="field">
+        <label>Grade</label>
+        <select id="fGrade"><option value="">ทั้งหมด</option></select>
+      </div>
+      <div class="field">
+        <label>สถานะ</label>
+        <select id="fStatus"><option value="">ทั้งหมด</option></select>
+      </div>
+      <div class="field" style="flex:0;">
+        <label>&nbsp;</label>
+        <button class="btn btn-outline" onclick="clearFilters()">ล้างตัวกรอง</button>
+      </div>
+    </div>
+
+    <div style="overflow-x:auto;">
+      <table id="tbl">
+        <thead>
+          <tr>
+            <th>รหัส</th><th>วันที่ตรวจ</th><th>Shop</th><th>จุดที่พบ</th><th class="desc-cell">รายละเอียด</th>
+            <th>Grade</th><th>Category</th><th>กำหนดเสร็จ</th><th>สถานะ</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div id="emptyMsg" class="hint" style="display:none;text-align:center;padding:20px;">ไม่พบข้อมูลตามเงื่อนไขที่เลือก</div>
+  </div>
+</div>
+
+<script src="api.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  let allRows = [];
+
+  function fillSelect(id, options) {
+    const sel = $(id);
+    options.forEach(o => {
+      const opt = document.createElement("option");
+      opt.value = o; opt.textContent = o;
+      sel.appendChild(opt);
+    });
+  }
+
+  function isOverdue(row) {
+    return STATUS_OPEN.includes(row.Status) && daysUntil(row.DueDate) < 0;
+  }
+
+  function statusPillClass(status) {
+    if (status === "ปิดงาน") return "pill-ok";
+    if (status === "รอตรวจสอบ") return "pill-info";
+    if (status === "ดำเนินการแล้ว") return "pill-warn";
+    return "pill-sub";
+  }
+
+  function renderKpis(rows) {
+    const open = rows.filter(r => STATUS_OPEN.includes(r.Status));
+    const overdue = rows.filter(isOverdue);
+    const closed = rows.filter(r => r.Status === "ปิดงาน");
+    const onTimeClosed = closed.filter(r => !r.Rules_Confirmed_DateTime || new Date(r.Rules_Confirmed_DateTime) <= new Date(r.DueDate + "T23:59:59"));
+    const onTimeRate = closed.length ? Math.round((onTimeClosed.length / closed.length) * 100) : 0;
+    $("kpiGrid").innerHTML = `
+      <div class="kpi"><div class="label">Findings ทั้งหมด</div><div class="value">${rows.length}</div></div>
+      <div class="kpi warn"><div class="label">เปิดอยู่</div><div class="value">${open.length}</div></div>
+      <div class="kpi bad"><div class="label">เลยกำหนด (Overdue)</div><div class="value">${overdue.length}</div></div>
+      <div class="kpi ok"><div class="label">ปิดงานตรงเวลา</div><div class="value">${onTimeRate}%</div></div>
+    `;
+  }
+
+  function applyFilters() {
+    const month = $("fMonth").value, shop = $("fShop").value, grade = $("fGrade").value, status = $("fStatus").value;
+    let rows = allRows.filter(r =>
+      (!month || r.PatrolDate.slice(0, 7) === month) &&
+      (!shop || r.Shop === shop) &&
+      (!grade || r.Grade === grade) &&
+      (!status || r.Status === status)
+    );
+    renderKpis(rows);
+    $("tbody").innerHTML = rows.map(r => `
+      <tr class="clickable" onclick="location.href='finding-detail.html?id=${r.Id}'">
+        <td>${findingCode(r)}</td>
+        <td>${fmtThaiDate(r.PatrolDate)}</td>
+        <td>${r.Shop}</td>
+        <td>${r.Place || "-"}</td>
+        <td class="desc-cell">${(r.Description || "").slice(0, 60)}${(r.Description || "").length > 60 ? "…" : ""}</td>
+        <td><span class="grade-badge ${r.Grade}">${r.Grade === "Others" ? "O" : r.Grade}</span></td>
+        <td>${r.Category || "-"}</td>
+        <td>${isOverdue(r) ? '<span class="overdue-dot"></span>' : ""}${fmtThaiDate(r.DueDate)}</td>
+        <td><span class="pill ${statusPillClass(r.Status)}">${r.Status}</span></td>
+      </tr>
+    `).join("");
+    $("emptyMsg").style.display = rows.length ? "none" : "block";
+  }
+
+  function clearFilters() {
+    ["fMonth", "fShop", "fGrade", "fStatus"].forEach(id => $(id).value = "");
+    applyFilters();
+  }
+
+  async function init() {
+    allRows = await SheAPI.list();
+    const months = [...new Set(allRows.map(r => r.PatrolDate.slice(0, 7)))].sort().reverse();
+    fillSelect("fMonth", months);
+    fillSelect("fShop", SHOP_OPTIONS);
+    fillSelect("fGrade", GRADE_OPTIONS);
+    fillSelect("fStatus", STATUS_OPTIONS);
+    ["fMonth", "fShop", "fGrade", "fStatus"].forEach(id => $(id).addEventListener("change", applyFilters));
+    applyFilters();
+  }
+  init();
+</script>
+
+</body>
+</html>

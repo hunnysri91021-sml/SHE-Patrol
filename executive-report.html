@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>รายงานผู้บริหาร (SES/F-PES) — SHE Patrol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .report-sheet{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px;font-size:12px;}
+  .report-head{text-align:center;margin-bottom:10px;}
+  .report-head .title{font-weight:700;font-size:15px;}
+  .report-head .ver{font-size:10.5px;color:var(--sub);text-align:right;}
+  .report-route{font-size:11px;color:var(--sub);text-align:center;margin:6px 0;}
+  .report-meta{display:flex;justify-content:space-between;font-size:11.5px;margin:10px 0;flex-wrap:wrap;gap:6px;}
+  .rtbl{width:100%;border-collapse:collapse;font-size:10.5px;}
+  .rtbl th, .rtbl td{border:1px solid #ccc;padding:5px 6px;vertical-align:top;}
+  .rtbl th{background:#F1EFE7;font-weight:700;text-align:center;}
+  .sign-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px;font-size:11px;}
+  .sign-row div{border-top:1px solid #999;padding-top:6px;text-align:center;}
+  .grade-tag{font-weight:700;}
+</style>
+</head>
+<body>
+
+<div class="backbar no-print"><a href="index.html">← กลับหน้าแรก</a></div>
+<div class="topbar no-print">
+  <div>
+    <div class="co">บริษัท สยามกลการโลจิสติกส์ จำกัด · SAFETY FIRST</div>
+    <h1>รายงานผู้บริหาร — รูปแบบ SES/F-PES</h1>
+  </div>
+</div>
+
+<div class="wrap no-print">
+  <div class="card">
+    <div class="toolbar">
+      <div class="field">
+        <label>เดือน</label>
+        <select id="fMonth"><option value="">ทั้งหมด</option></select>
+      </div>
+      <div class="field">
+        <label>Shop</label>
+        <select id="fShop"><option value="">ทั้งหมด</option></select>
+      </div>
+      <div class="field" style="flex:0;">
+        <label>&nbsp;</label>
+        <button class="btn btn-outline" onclick="window.print()">🖨️ พิมพ์ / บันทึก PDF</button>
+      </div>
+      <div class="field" style="flex:0;">
+        <label>&nbsp;</label>
+        <button class="btn btn-navy" onclick="exportCsv()">⬇️ ส่งออก CSV</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap" id="reportWrap" style="max-width:1100px;">
+  <div class="report-sheet" id="reportSheet"></div>
+</div>
+
+<script src="api.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  let allRows = [];
+
+  function fillSelect(id, options) {
+    const sel = $(id);
+    options.forEach(o => {
+      const opt = document.createElement("option");
+      opt.value = o; opt.textContent = o;
+      sel.appendChild(opt);
+    });
+  }
+
+  function filteredRows() {
+    const month = $("fMonth").value, shop = $("fShop").value;
+    return allRows
+      .filter(r => (!month || r.PatrolDate.slice(0, 7) === month) && (!shop || r.Shop === shop))
+      .sort((a, b) => a.PatrolDate.localeCompare(b.PatrolDate) || a.Id - b.Id);
+  }
+
+  function renderReport() {
+    const rows = filteredRows();
+    const monthLabel = $("fMonth").value
+      ? new Date($("fMonth").value + "-01").toLocaleDateString("th-TH", { year: "numeric", month: "long" })
+      : "ทุกเดือน";
+    $("reportSheet").innerHTML = `
+      <div class="report-head">
+        <div class="ver">Ver: SHE-Patrol-Digital / ${new Date().toLocaleDateString("th-TH")}</div>
+        <div class="title">( SES / F-PES ) Report of findings</div>
+        <div style="font-size:11px;color:var(--sub);">รอบรายงาน: ${monthLabel}${$("fShop").value ? " · Shop: " + $("fShop").value : ""}</div>
+      </div>
+      <div class="report-route">Report route: Safety department → Audited department → Verify by MGR → Verify by AGM/GM → Safety department</div>
+      <table class="rtbl">
+        <thead>
+          <tr>
+            <th>No</th><th>Shop</th><th>Place</th><th>Description</th><th>Grade</th><th>STD</th>
+            <th>Due Date</th><th>Root cause</th><th>Action / Responsible</th><th>Countermeasure</th><th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((r, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td>${r.Shop}</td>
+              <td>${r.Place || "-"}</td>
+              <td>${r.Description || "-"}</td>
+              <td class="grade-tag">${r.Grade}</td>
+              <td>${r.Category || "-"}</td>
+              <td>${fmtThaiDate(r.DueDate)}</td>
+              <td>${r.RootCause || "-"}</td>
+              <td>${r.ActionResponsible || "-"}</td>
+              <td>${r.Countermeasure || "-"}</td>
+              <td>${r.Status}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+      <div class="sign-row">
+        <div>MGR.<br>Date: __________</div>
+        <div>AGM / GM<br>Date: __________</div>
+        <div>SAFETY<br>Date: __________</div>
+        <div>VP (only A grade)<br>Date: __________</div>
+      </div>
+    `;
+  }
+
+  function exportCsv() {
+    const rows = filteredRows();
+    const headers = ["No", "PatrolDate", "Shop", "Place", "Description", "Grade", "Category", "DueDate", "RootCause", "ActionResponsible", "Countermeasure", "Status", "VerifiedBy", "Rules_Confirmed_DateTime"];
+    const esc = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const lines = [headers.join(",")];
+    rows.forEach((r, i) => {
+      lines.push([i + 1, r.PatrolDate, r.Shop, r.Place, r.Description, r.Grade, r.Category, r.DueDate, r.RootCause, r.ActionResponsible, r.Countermeasure, r.Status, r.VerifiedBy, r.Rules_Confirmed_DateTime].map(esc).join(","));
+    });
+    const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `SHE_Patrol_Report_${$("fMonth").value || "all"}.csv`;
+    a.click();
+  }
+
+  async function init() {
+    allRows = await SheAPI.list();
+    const months = [...new Set(allRows.map(r => r.PatrolDate.slice(0, 7)))].sort().reverse();
+    fillSelect("fMonth", months);
+    fillSelect("fShop", SHOP_OPTIONS);
+    ["fMonth", "fShop"].forEach(id => $(id).addEventListener("change", renderReport));
+    renderReport();
+  }
+  init();
+</script>
+
+</body>
+</html>

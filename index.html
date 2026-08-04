@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SHE Patrol — ระบบตรวจความปลอดภัยดิจิทัล</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<style>
+  .topbar{padding:34px 20px 44px;text-align:center;position:relative;overflow:hidden;}
+  .topbar::after{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(232,98,44,.28),transparent 70%);}
+  .logo-mark{width:56px;height:56px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:var(--shadow);position:relative;z-index:1;}
+  .logo-mark svg{width:32px;height:32px;}
+  .topbar .co{position:relative;z-index:1;}
+  .topbar h1{font-size:22px;margin:6px 0 0;font-weight:700;position:relative;z-index:1;}
+  .topbar p{position:relative;z-index:1;}
+  .land-wrap{max-width:820px;margin:-26px auto 0;padding:0 20px 60px;position:relative;z-index:2;}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px;}
+  @media (max-width:640px){.grid{grid-template-columns:1fr;}}
+  .role-card.new .icon{background:#FDEEE7;}
+  .role-card.list .icon{background:#EAF1F8;}
+  .role-card.dashboard .icon{background:var(--ok-bg);}
+  .role-card.report .icon{background:var(--warn-bg);}
+  .demo-banner{max-width:820px;margin:16px auto 0;padding:0 20px;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo-mark">
+    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#0F3D5C" stroke-width="1.6"/><path d="M12 3v18M3 12h18" stroke="#0F3D5C" stroke-width="1" opacity=".35"/><path d="M8 12.5l2.3 2.3L16 9.5" stroke="#E8622C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </div>
+  <div class="co">บริษัท สยามกลการโลจิสติกส์ จำกัด · SAFETY FIRST</div>
+  <h1>ระบบ SHE Patrol Digital</h1>
+  <p>ติดตามผลการตรวจ SES / F-PES แบบ Realtime — เลือกเมนูที่ต้องการใช้งานด้านล่าง</p>
+</div>
+
+<div class="demo-banner" id="demoBanner"></div>
+
+<div class="land-wrap">
+  <div class="grid">
+    <a class="role-card new" href="new-finding.html">
+      <div class="icon">📝</div>
+      <div class="txt">
+        <b>บันทึกรายการตรวจใหม่</b>
+        <span>สำหรับผู้ตรวจ (SHE-Auditor) บันทึกพบ finding ระหว่างเดินตรวจ</span>
+      </div>
+      <div class="arrow">→</div>
+    </a>
+
+    <a class="role-card list" href="findings.html">
+      <div class="icon">📋</div>
+      <div class="txt">
+        <b>รายการ Findings</b>
+        <span>ดู/อัปเดตมาตรการแก้ไข แนบรูปหลัง และปิดงาน</span>
+      </div>
+      <div class="arrow">→</div>
+    </a>
+
+    <a class="role-card dashboard" href="dashboard.html">
+      <div class="icon">📊</div>
+      <div class="txt">
+        <b>Dashboard</b>
+        <span>สรุป Grade / อัตราปิดงานตรงเวลา / พื้นที่ปัญหาซ้ำ</span>
+      </div>
+      <div class="arrow">→</div>
+    </a>
+
+    <a class="role-card report" href="executive-report.html">
+      <div class="icon">🖨️</div>
+      <div class="txt">
+        <b>รายงานผู้บริหาร (SES/F-PES)</b>
+        <span>ดูตามเดือน พิมพ์/ส่งออกในรูปแบบฟอร์มเดิม</span>
+      </div>
+      <div class="arrow">→</div>
+    </a>
+  </div>
+
+  <div class="foot">SHE Patrol Digital System · ข้อมูลอยู่บน SharePoint List ของ SML · Rules_Confirmed_DateTime บันทึกทุกการปิดงานเพื่อการตรวจสอบย้อนหลัง</div>
+</div>
+
+<script src="api.js"></script>
+<script>
+  if (!SheAPI.LIVE) {
+    document.getElementById("demoBanner").innerHTML =
+      '<div class="banner warn" style="max-width:820px;margin:0 auto;">⚠️ กำลังใช้งาน <b>Demo Mode</b> (ข้อมูลเก็บใน browser เท่านั้น) — เชื่อมต่อ SharePoint จริงยังไม่พร้อม ' +
+      'กรุณาแก้ SP_CONFIG.SITE_URL ใน <code>api.js</code> หลังรัน provisioning script แล้วเปิดหน้านี้จากภายใน SharePoint site นั้น</div>';
+  }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บันทึกรายการตรวจใหม่ — SHE Patrol</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="backbar"><a href="index.html">← กลับหน้าแรก</a></div>
+<div class="topbar">
+  <div>
+    <div class="co">บริษัท สยามกลการโลจิสติกส์ จำกัด · SAFETY FIRST</div>
+    <h1>บันทึกรายการตรวจใหม่ (SHE-Auditor)</h1>
+  </div>
+</div>
+
+<div class="wrap-narrow">
+  <div class="banner info" id="modeBanner" style="display:none;"></div>
+
+  <form class="card" id="findingForm">
+    <div class="grid2">
+      <div class="field">
+        <label>วันที่ตรวจ (Patrol Date) *</label>
+        <input type="date" id="patrolDate" required>
+      </div>
+      <div class="field">
+        <label>กำหนดเสร็จ (Due Date) <span style="font-weight:400;">— คำนวณอัตโนมัติตาม Grade</span></label>
+        <input type="date" id="dueDate" required>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Shop *</label>
+      <div class="chip-group" id="shopChips"></div>
+      <input type="hidden" id="shop" required>
+    </div>
+
+    <div class="field">
+      <label>จุดที่พบ (Place) *</label>
+      <input type="text" id="place" placeholder="เช่น line Acc., PDI Line 2" required>
+    </div>
+
+    <div class="field">
+      <label>รายละเอียดที่พบ (Description) *</label>
+      <textarea id="description" placeholder="อธิบายสิ่งที่ตรวจพบ" required></textarea>
+    </div>
+
+    <div class="grid2">
+      <div class="field">
+        <label>Grade *</label>
+        <div class="chip-group" id="gradeChips"></div>
+        <input type="hidden" id="grade" required>
+        <div class="hint" id="slaHint"></div>
+      </div>
+      <div class="field">
+        <label>Category *</label>
+        <div class="chip-group" id="categoryChips"></div>
+        <input type="hidden" id="category" required>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>รูปภาพสภาพก่อนแก้ไข (Photo Before)</label>
+      <div class="photo-upload" id="photoBox" onclick="document.getElementById('photoInput').click()">
+        <div class="ph" id="photoPh">แตะเพื่อถ่ายรูป / เลือกไฟล์รูปสภาพที่พบ</div>
+        <img id="photoPreview" style="display:none;">
+      </div>
+      <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none;">
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-block" id="submitBtn">บันทึก Finding</button>
+    <div class="hint" id="formMsg" style="margin-top:10px;text-align:center;"></div>
+  </form>
+</div>
+
+<script src="api.js"></script>
+<script>
+  const $ = id => document.getElementById(id);
+  let selectedPhoto = null;
+
+  function renderChips(containerId, hiddenId, options, onSelect) {
+    const box = $(containerId);
+    box.innerHTML = options.map(o => `<div class="chip" data-val="${o}">${o}</div>`).join("");
+    box.querySelectorAll(".chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        box.querySelectorAll(".chip").forEach(c => c.classList.remove("active", "grade-A", "grade-B", "grade-C", "grade-Others"));
+        chip.classList.add("active");
+        if (containerId === "gradeChips") chip.classList.add("grade-" + chip.dataset.val);
+        $(hiddenId).value = chip.dataset.val;
+        if (onSelect) onSelect(chip.dataset.val);
+      });
+    });
+  }
+
+  renderChips("shopChips", "shop", SHOP_OPTIONS);
+  renderChips("categoryChips", "category", CATEGORY_OPTIONS);
+  renderChips("gradeChips", "grade", GRADE_OPTIONS, (grade) => {
+    const patrolDate = $("patrolDate").value || new Date().toISOString().slice(0, 10);
+    $("dueDate").value = calcDueDate(patrolDate, grade);
+    $("slaHint").textContent = `SLA: ${SLA_DAYS[grade]} วัน — เลยกำหนดจะ escalate ถึง ${SLA_ESCALATE[grade]}`;
+  });
+
+  $("patrolDate").value = new Date().toISOString().slice(0, 10);
+  $("patrolDate").addEventListener("change", () => {
+    const grade = $("grade").value;
+    if (grade) $("dueDate").value = calcDueDate($("patrolDate").value, grade);
+  });
+
+  $("photoInput").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    selectedPhoto = file;
+    const reader = new FileReader();
+    reader.onload = () => {
+      $("photoPreview").src = reader.result;
+      $("photoPreview").style.display = "block";
+      $("photoPh").style.display = "none";
+    };
+    reader.readAsDataURL(file);
+  });
+
+  if (!SheAPI.LIVE) {
+    $("modeBanner").style.display = "block";
+    $("modeBanner").textContent = "⚠️ Demo Mode — ข้อมูลจะบันทึกใน browser นี้เท่านั้น (ยังไม่เชื่อมต่อ SharePoint จริง)";
+  }
+
+  $("findingForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const shop = $("shop").value, grade = $("grade").value, category = $("category").value;
+    if (!shop || !grade || !category) {
+      $("formMsg").textContent = "กรุณาเลือก Shop / Grade / Category ให้ครบ";
+      $("formMsg").style.color = "var(--bad)";
+      return;
+    }
+    $("submitBtn").disabled = true;
+    $("submitBtn").textContent = "กำลังบันทึก...";
+    try {
+      const fields = {
+        PatrolDate: $("patrolDate").value,
+        Shop: shop,
+        Place: $("place").value,
+        Description: $("description").value,
+        Grade: grade,
+        Category: category,
+        DueDate: $("dueDate").value,
+        Status: "เปิดใหม่",
+      };
+      const created = await SheAPI.create(fields);
+      if (selectedPhoto) {
+        const url = await SheAPI.uploadPhoto(selectedPhoto, created.Id, "ก่อนแก้ไข");
+        await SheAPI.update(created.Id, { PhotoBeforeUrl: url });
+      }
+      $("formMsg").style.color = "var(--ok)";
+      $("formMsg").textContent = `บันทึกสำเร็จ (รหัส ${findingCode(created)}) กำลังไปหน้ารายการ...`;
+      setTimeout(() => { window.location.href = `finding-detail.html?id=${created.Id}`; }, 900);
+    } catch (err) {
+      $("formMsg").style.color = "var(--bad)";
+      $("formMsg").textContent = "เกิดข้อผิดพลาด: " + err.message;
+      $("submitBtn").disabled = false;
+      $("submitBtn").textContent = "บันทึก Finding";
+    }
+  });
+</script>
+
+</body>
+</html>
