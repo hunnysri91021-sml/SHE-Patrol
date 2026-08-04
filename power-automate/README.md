@@ -35,7 +35,7 @@ Language) ท้ายไฟล์ เพื่อ copy expression ไปวา�
 
 3. เตรียมอีเมล **MGR / AGM-GM / เจ้าหน้าที่ความปลอดภัย (Safety Officer)** สำหรับ escalation ตาม Grade
 4. รู้ URL หน้าเว็บ front-end จริง (หลังอัปโหลดเข้า SharePoint) เพื่อใส่ deep link ในอีเมล
-   รูปแบบ: `<FRONTEND_BASE_URL>/finding-detail.html?id=<ItemID>`
+   รูปแบบ: `<FRONTEND_BASE_URL>/index.html?id=<ItemID>`
 
 ## รายการ flow
 

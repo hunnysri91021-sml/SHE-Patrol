@@ -3,6 +3,7 @@
     Provisions the SHE Patrol Digital System on a SharePoint Online site:
     - List: SHE_Patrol_Findings (16 columns)
     - Document Library: SHE_Patrol_Photos (FindingID, PhotoStage columns)
+    - List: SHE_Patrol_Users (Name, Email, Role, Shop, Active — login roster managed by Admin)
     - 4 permission groups: SHE-Auditor, SHE-Dept-Responsible, SHE-Safety-Admin, SHE-Executive-Viewer
 
 .DESCRIPTION
@@ -132,6 +133,50 @@ foreach ($f in $libraryFields) {
 }
 
 # --------------------------------------------------------------------------
+# 2b. List: SHE_Patrol_Users (login roster — Admin assigns Role/Shop here)
+# --------------------------------------------------------------------------
+
+$usersListName = "SHE_Patrol_Users"
+
+$usersList = Get-PnPList -Identity $usersListName -ErrorAction SilentlyContinue
+if (-not $usersList) {
+    Write-Host "Creating list '$usersListName' ..." -ForegroundColor Cyan
+    $usersList = New-PnPList -Title $usersListName -Template GenericList -OnQuickLaunch
+} else {
+    Write-Host "List '$usersListName' already exists — skipping creation." -ForegroundColor DarkGray
+}
+
+$userFields = @(
+    @{ Name = "Name";    Display = "ชื่อ-นามสกุล";       Type = "Text" }
+    @{ Name = "Email";   Display = "อีเมล";               Type = "Text" }
+    @{ Name = "Role";    Display = "บทบาท (Role)";        Type = "Choice"; Choices = @("SHE-Auditor","SHE-Dept-Responsible","SHE-Safety-Admin","SHE-Executive-Viewer") }
+    @{ Name = "Shop";    Display = "Shop (เฉพาะ Dept-Responsible)"; Type = "Choice"; Choices = @("","PDI","Acc","Yard","Washing","Touch up","Store","อื่นๆ") }
+    @{ Name = "Active";  Display = "ใช้งานอยู่";          Type = "Boolean" }
+)
+
+foreach ($f in $userFields) {
+    $existing = Get-PnPField -List $usersListName -Identity $f.Name -ErrorAction SilentlyContinue
+    if ($existing) {
+        Write-Host "  Field '$($f.Name)' already exists — skipping." -ForegroundColor DarkGray
+        continue
+    }
+    Write-Host "  Adding field '$($f.Name)' ($($f.Type)) ..." -ForegroundColor Cyan
+    switch ($f.Type) {
+        "Choice" {
+            Add-PnPField -List $usersListName -DisplayName $f.Display -InternalName $f.Name -Type Choice -Choices $f.Choices -AddToDefaultView | Out-Null
+        }
+        default {
+            Add-PnPField -List $usersListName -DisplayName $f.Display -InternalName $f.Name -Type $f.Type -AddToDefaultView | Out-Null
+        }
+    }
+}
+
+$activeField = Get-PnPField -List $usersListName -Identity "Active" -ErrorAction SilentlyContinue
+if ($activeField -and -not $activeField.DefaultValue) {
+    Set-PnPField -List $usersListName -Identity "Active" -Values @{ DefaultValue = "1" } | Out-Null
+}
+
+# --------------------------------------------------------------------------
 # 3. Permission groups
 # --------------------------------------------------------------------------
 
@@ -156,6 +201,12 @@ foreach ($g in $groupDefs) {
 
     Write-Host "  Granting '$($g.Role)' on '$libraryName' to '$($g.Name)' ..." -ForegroundColor Cyan
     Set-PnPListPermission -Identity $libraryName -Group $g.Name -AddRole $g.Role | Out-Null
+
+    # SHE_Patrol_Users: only Safety-Admin can manage the roster; everyone else needs
+    # Read so the app can look up their own Role/Shop at sign-in.
+    $usersRole = if ($g.Name -eq "SHE-Safety-Admin") { "Full Control" } else { "Read" }
+    Write-Host "  Granting '$usersRole' on '$usersListName' to '$($g.Name)' ..." -ForegroundColor Cyan
+    Set-PnPListPermission -Identity $usersListName -Group $g.Name -AddRole $usersRole | Out-Null
 }
 
 Write-Host ""
@@ -163,6 +214,7 @@ Write-Host "=== Provisioning complete ===" -ForegroundColor Green
 Write-Host "Site: $SiteUrl"
 Write-Host "List: $listName (16 columns)"
 Write-Host "Library: $libraryName (FindingID, PhotoStage)"
+Write-Host "List: $usersListName (Name, Email, Role, Shop, Active)"
 Write-Host "Groups: $($groupDefs.Name -join ', ')"
 Write-Host ""
 Write-Host "หมายเหตุสำคัญ (SHE-Dept-Responsible scoping):" -ForegroundColor Yellow

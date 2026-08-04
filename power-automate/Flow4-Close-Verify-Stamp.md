@@ -2,7 +2,7 @@
 
 Connector: SharePoint (standard) + Office 365 Outlook (standard). ไม่มี premium.
 
-Front-end (`finding-detail.html`) เซ็ต `VerifiedBy` และ `Rules_Confirmed_DateTime` ให้อยู่แล้วตอนกดปิดงาน
+Front-end (`index.html`) เซ็ต `VerifiedBy` (ชื่อผู้ใช้ที่ login อยู่) และ `Rules_Confirmed_DateTime` ให้อยู่แล้วตอนกดปิดงาน
 ผ่าน SharePoint REST โดยตรง — flow นี้เป็น **audit safety-net**: กันกรณีมีคนไปแก้ `Status` เป็น
 "ปิดงาน" ตรงๆ จากมุมมอง SharePoint list (ไม่ผ่านหน้าเว็บ) แล้วลืมกรอกสองคอลัมน์นี้ พร้อมส่งอีเมลแจ้ง
 ปิดงานอย่างเป็นทางการ
@@ -37,7 +37,7 @@ Front-end (`finding-detail.html`) เซ็ต `VerifiedBy` และ `Rules_Con
      Grade: @{triggerBody()?['Grade']} | Shop: @{triggerBody()?['Shop']}<br>
      ผู้ตรวจยืนยัน (Verified By): @{triggerBody()?['VerifiedBy']?['DisplayName']}<br>
      เวลายืนยัน: @{formatDateTime(triggerBody()?['Rules_Confirmed_DateTime'], 'dd/MM/yyyy HH:mm')}<br><br>
-     <a href="<FRONTEND_BASE_URL>/finding-detail.html?id=@{triggerBody()?['ID']}">ดูรายละเอียด</a>
+     <a href="<FRONTEND_BASE_URL>/index.html?id=@{triggerBody()?['ID']}">ดูรายละเอียด</a>
      ```
 
 ## JSON โครงสร้างอ้างอิง

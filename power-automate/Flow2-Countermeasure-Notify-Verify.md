@@ -25,7 +25,7 @@ Connector: SharePoint (standard) + Office 365 Outlook (standard). ไม่ม�
      Shop: @{triggerBody()?['Shop']} | Grade: @{triggerBody()?['Grade']}<br>
      มาตรการแก้ไข: @{triggerBody()?['Countermeasure']}<br>
      ผู้รับผิดชอบ: @{triggerBody()?['ActionResponsible']?['DisplayName']}<br><br>
-     <a href="<FRONTEND_BASE_URL>/finding-detail.html?id=@{triggerBody()?['ID']}">เปิดหน้าตรวจสอบและปิดงาน</a>
+     <a href="<FRONTEND_BASE_URL>/index.html?id=@{triggerBody()?['ID']}">เปิดหน้าตรวจสอบและปิดงาน</a>
      ```
 
 ## JSON โครงสร้างอ้างอิง

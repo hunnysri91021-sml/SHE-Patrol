@@ -31,7 +31,7 @@ Connector: SharePoint (standard) + Office 365 Outlook (standard). ไม่ม�
      Grade: @{triggerBody()?['Grade']} | Category: @{triggerBody()?['Category']}<br>
      กำหนดเสร็จ (Due Date): @{formatDateTime(triggerBody()?['DueDate'], 'dd/MM/yyyy')}<br><br>
      ดูรายละเอียดและอัปเดตมาตรการแก้ไข:<br>
-     <a href="<FRONTEND_BASE_URL>/finding-detail.html?id=@{triggerBody()?['ID']}">เปิดหน้า Finding</a>
+     <a href="<FRONTEND_BASE_URL>/index.html?id=@{triggerBody()?['ID']}">เปิดหน้า Finding</a>
      ```
 
 ## JSON โครงสร้างอ้างอิง (Workflow Definition Language)

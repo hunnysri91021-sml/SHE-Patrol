@@ -31,7 +31,7 @@ SLA: Grade A = 7 วัน (escalate MGR+AGM/GM ทันทีถ้าเล�
      Finding Grade @{items('Apply_to_each')?['Grade']} ที่ @{items('Apply_to_each')?['Shop']} / @{items('Apply_to_each')?['Place']}<br>
      สถานะ SLA: @{if(less(outputs('DaysLeft'), 0), concat('เลยกำหนดมาแล้ว ', string(mul(outputs('DaysLeft'), -1)), ' วัน'), concat('เหลืออีก ', string(outputs('DaysLeft')), ' วัน'))}<br>
      สถานะปัจจุบัน: @{items('Apply_to_each')?['Status']}<br><br>
-     <a href="<FRONTEND_BASE_URL>/finding-detail.html?id=@{items('Apply_to_each')?['ID']}">เปิดหน้า Finding</a>
+     <a href="<FRONTEND_BASE_URL>/index.html?id=@{items('Apply_to_each')?['ID']}">เปิดหน้า Finding</a>
      ```
 
 ## JSON โครงสร้างอ้างอิง

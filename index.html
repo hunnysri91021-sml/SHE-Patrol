@@ -3,91 +3,1648 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SHE Patrol — ระบบตรวจความปลอดภัยดิจิทัล</title>
+<title>SHE Patrol - ระบบบันทึกผลตรวจพื้นที่</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
-  .topbar{padding:34px 20px 44px;text-align:center;position:relative;overflow:hidden;}
-  .topbar::after{content:"";position:absolute;right:-60px;top:-60px;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(232,98,44,.28),transparent 70%);}
-  .logo-mark{width:56px;height:56px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:var(--shadow);position:relative;z-index:1;}
-  .logo-mark svg{width:32px;height:32px;}
-  .topbar .co{position:relative;z-index:1;}
-  .topbar h1{font-size:22px;margin:6px 0 0;font-weight:700;position:relative;z-index:1;}
-  .topbar p{position:relative;z-index:1;}
-  .land-wrap{max-width:820px;margin:-26px auto 0;padding:0 20px 60px;position:relative;z-index:2;}
-  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:20px;}
-  @media (max-width:640px){.grid{grid-template-columns:1fr;}}
-  .role-card.new .icon{background:#FDEEE7;}
-  .role-card.list .icon{background:#EAF1F8;}
-  .role-card.dashboard .icon{background:var(--ok-bg);}
-  .role-card.report .icon{background:var(--warn-bg);}
-  .demo-banner{max-width:820px;margin:16px auto 0;padding:0 20px;}
+  :root{
+    --navy:#1F3864;
+    --navy-light:#2E4E8C;
+    --navy-pale:#EAF0FA;
+    --accent:#C00000;
+    --accent-pale:#FBE7E7;
+    --bg:#F4F6F9;
+    --card:#FFFFFF;
+    --border:#E2E8F0;
+    --text:#1A202C;
+    --muted:#718096;
+    --green:#2F855A;
+    --green-pale:#E6F4EC;
+    --orange:#C05621;
+    --orange-pale:#FDF0E4;
+    --yellow:#B7791F;
+    --yellow-pale:#FEF6E7;
+    --gray-pale:#EDF2F7;
+    --radius:10px;
+    --shadow:0 1px 2px rgba(16,24,40,0.06),0 1px 3px rgba(16,24,40,0.08);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Noto Sans Thai','TH Sarabun New','Sarabun',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:1200px;margin:0 auto;padding:0 20px 60px;}
+
+  /* Header */
+  header.topbar{
+    background:linear-gradient(135deg,var(--navy) 0%, var(--navy-light) 100%);
+    color:#fff;
+    padding:18px 24px;
+    margin-bottom:20px;
+  }
+  .topbar-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+  .brand{display:flex;align-items:center;gap:12px;}
+  .brand-badge{
+    width:42px;height:42px;border-radius:10px;background:rgba(255,255,255,0.15);
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;
+    border:1px solid rgba(255,255,255,0.3);
+  }
+  .brand-text .t1{font-size:12px;opacity:0.8;letter-spacing:0.03em;}
+  .brand-text .t2{font-size:19px;font-weight:700;}
+  .role-select{
+    display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.12);
+    padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);
+  }
+  .role-select label{font-size:12px;opacity:0.85;}
+  .role-select select{
+    background:transparent;color:#fff;border:none;font-size:14px;font-weight:600;
+    font-family:inherit;outline:none;
+  }
+  .role-select select option{color:#1A202C;}
+
+  /* Toolbar */
+  .toolbar{
+    background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+    padding:16px;margin-bottom:16px;box-shadow:var(--shadow);
+    display:flex;gap:14px;flex-wrap:wrap;align-items:end;
+  }
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field label{font-size:12px;color:var(--muted);font-weight:600;}
+  .field input,.field select,.field textarea{
+    font-family:inherit;font-size:14px;padding:8px 10px;border:1px solid var(--border);
+    border-radius:7px;background:#fff;color:var(--text);
+  }
+  .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--navy-light);outline-offset:1px;}
+  .btn{
+    font-family:inherit;font-size:14px;font-weight:600;padding:9px 16px;border-radius:8px;
+    border:1px solid transparent;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+    transition:filter .12s ease, transform .05s ease;
+  }
+  .btn:active{transform:translateY(1px);}
+  .btn-primary{background:var(--navy);color:#fff;}
+  .btn-primary:hover{filter:brightness(1.1);}
+  .btn-accent{background:var(--accent);color:#fff;}
+  .btn-accent:hover{filter:brightness(1.1);}
+  .btn-ghost{background:#fff;color:var(--navy);border-color:var(--border);}
+  .btn-ghost:hover{background:var(--navy-pale);}
+  .btn-sm{padding:6px 11px;font-size:13px;}
+  .btn:disabled{opacity:0.45;cursor:not-allowed;}
+
+  /* Dashboard cards */
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;}
+  .card{
+    background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+    padding:14px 16px;box-shadow:var(--shadow);
+  }
+  .card .num{font-size:26px;font-weight:800;color:var(--navy);line-height:1.1;}
+  .card .lbl{font-size:12.5px;color:var(--muted);margin-top:4px;}
+  .card.warn .num{color:var(--accent);}
+  .card.ok .num{color:var(--green);}
+
+  /* List */
+  .list-header{display:flex;justify-content:space-between;align-items:center;margin:6px 0 10px;}
+  .list-header h2{font-size:16px;margin:0;color:var(--navy);}
+  .empty{
+    background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);
+    padding:40px;text-align:center;color:var(--muted);
+  }
+  .finding-card{
+    background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+    padding:14px 16px;margin-bottom:10px;box-shadow:var(--shadow);cursor:pointer;
+    display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
+  }
+  .finding-card:hover{border-color:var(--navy-light);}
+  .fc-left{display:flex;gap:12px;align-items:center;flex:1;min-width:260px;}
+  .grade-chip{
+    width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:15px;flex-shrink:0;
+  }
+  .grade-A{background:var(--accent-pale);color:var(--accent);}
+  .grade-B{background:var(--orange-pale);color:var(--orange);}
+  .grade-C{background:var(--yellow-pale);color:var(--yellow);}
+  .grade-Others{background:var(--gray-pale);color:var(--muted);}
+  .fc-title{font-weight:700;font-size:14.5px;}
+  .fc-sub{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .fc-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .badge{padding:4px 10px;border-radius:99px;font-size:12px;font-weight:700;white-space:nowrap;}
+  .st-เปิดใหม่{background:var(--accent-pale);color:var(--accent);}
+  .st-รอดำเนินการ{background:var(--orange-pale);color:var(--orange);}
+  .st-ดำเนินการแล้ว{background:var(--yellow-pale);color:var(--yellow);}
+  .st-รอตรวจสอบ{background:var(--navy-pale);color:var(--navy);}
+  .st-ปิดงาน{background:var(--green-pale);color:var(--green);}
+  .overdue-tag{background:var(--accent);color:#fff;padding:3px 9px;border-radius:99px;font-size:11.5px;font-weight:700;}
+  .due-tag{font-size:12px;color:var(--muted);}
+
+  /* Modal */
+  .modal-backdrop{
+    position:fixed;inset:0;background:rgba(15,23,42,0.55);display:none;
+    align-items:flex-start;justify-content:center;padding:30px 16px;z-index:50;overflow-y:auto;
+  }
+  .modal-backdrop.show{display:flex;}
+  .modal{
+    background:#fff;border-radius:14px;max-width:640px;width:100%;padding:0;box-shadow:0 20px 60px rgba(0,0,0,0.25);
+    animation:pop .15s ease;
+  }
+  @keyframes pop{from{transform:translateY(6px);opacity:0;}to{transform:translateY(0);opacity:1;}}
+  .modal-head{
+    padding:18px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;
+    background:var(--navy-pale);border-radius:14px 14px 0 0;
+  }
+  .modal-head h3{margin:0;font-size:17px;color:var(--navy);}
+  .modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);}
+  .modal-body{padding:20px 22px;max-height:70vh;overflow-y:auto;}
+  .modal-foot{padding:16px 22px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:10px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .grid2 .field{width:100%;}
+  .full{grid-column:1/-1;}
+  .sla-hint{font-size:12px;color:var(--muted);margin-top:4px;}
+
+  .detail-row{display:flex;gap:12px;padding:9px 0;border-bottom:1px solid #F1F3F6;font-size:14px;}
+  .detail-row .k{width:150px;flex-shrink:0;color:var(--muted);font-weight:600;}
+  .detail-row .v{flex:1;}
+  .photo-box{
+    border:1px dashed var(--border);border-radius:8px;padding:10px;text-align:center;
+    background:#FAFBFC;
+  }
+  .photo-box img{max-width:100%;max-height:220px;border-radius:6px;margin-top:8px;}
+  .section-title{font-size:13px;font-weight:700;color:var(--navy);margin:18px 0 8px;text-transform:uppercase;letter-spacing:.03em;}
+  .status-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  .readonly-msg{
+    background:var(--navy-pale);color:var(--navy);padding:9px 12px;border-radius:8px;font-size:13px;margin-bottom:10px;
+  }
+  .storage-note{
+    font-size:12px;color:var(--muted);text-align:center;margin-top:18px;padding-top:14px;border-top:1px solid var(--border);
+  }
+  .loading{text-align:center;padding:50px;color:var(--muted);}
+  @media(max-width:640px){
+    .grid2{grid-template-columns:1fr;}
+    .toolbar{flex-direction:column;align-items:stretch;}
+    .detail-row{flex-direction:column;gap:2px;}
+    .detail-row .k{width:auto;}
+  }
+
+  /* ---- Login screen ---- */
+  .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(135deg,var(--navy) 0%, var(--navy-light) 100%);}
+  .login-card{background:#fff;border-radius:14px;max-width:400px;width:100%;padding:28px 26px;box-shadow:0 20px 60px rgba(0,0,0,0.3);}
+  .login-card .brand-badge{width:48px;height:48px;border-radius:12px;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:19px;margin:0 auto 12px;}
+  .login-card h1{font-size:17px;text-align:center;margin:0 0 4px;color:var(--navy);}
+  .login-card p{font-size:12.5px;text-align:center;color:var(--muted);margin:0 0 20px;}
+  .login-card .field{margin-bottom:14px;}
+  .login-msg{font-size:12.5px;color:var(--accent);text-align:center;margin-top:8px;}
+  .login-hint{font-size:11.5px;color:var(--muted);text-align:center;margin-top:14px;border-top:1px solid var(--border);padding-top:12px;}
+
+  /* ---- App shell / nav ---- */
+  .user-chip{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.12);padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);font-size:12.5px;}
+  .user-chip b{font-weight:700;}
+  .user-chip .role-tag{background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:99px;font-size:10.5px;font-weight:700;}
+  .logout-link{color:#fff;opacity:.8;font-size:12px;text-decoration:none;cursor:pointer;}
+  .logout-link:hover{opacity:1;text-decoration:underline;}
+  .tabs{display:flex;gap:4px;max-width:1200px;margin:0 auto;padding:0 24px;background:var(--navy);flex-wrap:wrap;}
+  .tab-btn{background:none;border:none;color:rgba(255,255,255,0.7);font-family:inherit;font-size:13.5px;font-weight:600;padding:11px 16px;cursor:pointer;border-bottom:3px solid transparent;}
+  .tab-btn:hover{color:#fff;}
+  .tab-btn.active{color:#fff;border-bottom-color:var(--accent);}
+
+  /* ---- Demo mode banner ---- */
+  .demo-flag{background:var(--yellow-pale);color:var(--yellow);text-align:center;font-size:12.5px;padding:7px 12px;}
+
+  /* ---- Admin: users table ---- */
+  .users-table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  .users-table th{text-align:left;color:var(--muted);font-weight:600;padding:9px 10px;border-bottom:2px solid var(--border);}
+  .users-table td{padding:9px 10px;border-bottom:1px solid var(--border);}
+  .role-badge{padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700;white-space:nowrap;}
+  .role-badge.auditor{background:var(--navy-pale);color:var(--navy);}
+  .role-badge.dept{background:var(--orange-pale);color:var(--orange);}
+  .role-badge.admin{background:var(--accent-pale);color:var(--accent);}
+  .role-badge.exec{background:var(--green-pale);color:var(--green);}
+  .active-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);}
+  .active-dot.off{background:var(--muted);}
+  .info-banner{background:var(--navy-pale);color:var(--navy);padding:11px 14px;border-radius:8px;font-size:12.5px;margin-bottom:14px;}
+
+  /* ---- Dashboard charts screen ---- */
+  .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media (max-width:760px){.chart-grid{grid-template-columns:1fr;}}
+  .chart-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;}
+  .chart-card h3{font-size:13.5px;margin:0 0 12px;color:var(--navy);}
+  .chart-wrap{position:relative;height:250px;}
+  .top-list{list-style:none;margin:0;padding:0;}
+  .top-list li{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px;}
+  .top-list li:last-child{border-bottom:none;}
+  .top-list .cnt{font-weight:700;color:var(--navy);}
+
+  /* ---- Executive report screen ---- */
+  .report-sheet{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:20px;font-size:11.5px;}
+  .report-head{text-align:center;margin-bottom:8px;}
+  .report-head .title{font-weight:800;font-size:15px;color:var(--navy);}
+  .rtbl{width:100%;border-collapse:collapse;font-size:10.5px;margin-top:10px;}
+  .rtbl th,.rtbl td{border:1px solid #ccc;padding:5px 6px;vertical-align:top;}
+  .rtbl th{background:var(--navy-pale);font-weight:700;text-align:center;color:var(--navy);}
+  .sign-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px;font-size:11px;}
+  .sign-row div{border-top:1px solid #999;padding-top:6px;text-align:center;}
+
+  @media print{
+    .no-print{display:none !important;}
+    body{background:#fff;}
+    .app{max-width:100%;padding:0;}
+  }
+
 </style>
 </head>
 <body>
 
-<div class="topbar">
-  <div class="logo-mark">
-    <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="#0F3D5C" stroke-width="1.6"/><path d="M12 3v18M3 12h18" stroke="#0F3D5C" stroke-width="1" opacity=".35"/><path d="M8 12.5l2.3 2.3L16 9.5" stroke="#E8622C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<!-- ============== LOGIN SCREEN ============== -->
+<div class="login-wrap" id="loginScreen">
+  <div class="login-card">
+    <div class="brand-badge">SHE</div>
+    <h1>SHE Patrol — เข้าสู่ระบบ</h1>
+    <p>Siam Motors Logistics Co., Ltd.</p>
+    <div class="field">
+      <label>เลือกชื่อของคุณ</label>
+      <select id="loginUserSelect"><option value="">— กำลังโหลดรายชื่อ... —</option></select>
+    </div>
+    <button class="btn btn-primary" style="width:100%;justify-content:center;" id="loginBtn">เข้าสู่ระบบ</button>
+    <div class="login-msg" id="loginMsg"></div>
+    <div class="login-hint">
+      ไม่เห็นชื่อของคุณ? ให้ Safety Admin เพิ่มชื่อคุณที่เมนู "จัดการผู้ใช้งาน" ก่อน<br>
+      (รายชื่อผู้ใช้ทั้งหมดบริหารจัดการโดย Admin เท่านั้น ไม่ใช่การสมัครสมาชิกด้วยตนเอง)
+    </div>
   </div>
-  <div class="co">บริษัท สยามกลการโลจิสติกส์ จำกัด · SAFETY FIRST</div>
-  <h1>ระบบ SHE Patrol Digital</h1>
-  <p>ติดตามผลการตรวจ SES / F-PES แบบ Realtime — เลือกเมนูที่ต้องการใช้งานด้านล่าง</p>
 </div>
 
-<div class="demo-banner" id="demoBanner"></div>
-
-<div class="land-wrap">
-  <div class="grid">
-    <a class="role-card new" href="new-finding.html">
-      <div class="icon">📝</div>
-      <div class="txt">
-        <b>บันทึกรายการตรวจใหม่</b>
-        <span>สำหรับผู้ตรวจ (SHE-Auditor) บันทึกพบ finding ระหว่างเดินตรวจ</span>
-      </div>
-      <div class="arrow">→</div>
-    </a>
-
-    <a class="role-card list" href="findings.html">
-      <div class="icon">📋</div>
-      <div class="txt">
-        <b>รายการ Findings</b>
-        <span>ดู/อัปเดตมาตรการแก้ไข แนบรูปหลัง และปิดงาน</span>
-      </div>
-      <div class="arrow">→</div>
-    </a>
-
-    <a class="role-card dashboard" href="dashboard.html">
-      <div class="icon">📊</div>
-      <div class="txt">
-        <b>Dashboard</b>
-        <span>สรุป Grade / อัตราปิดงานตรงเวลา / พื้นที่ปัญหาซ้ำ</span>
-      </div>
-      <div class="arrow">→</div>
-    </a>
-
-    <a class="role-card report" href="executive-report.html">
-      <div class="icon">🖨️</div>
-      <div class="txt">
-        <b>รายงานผู้บริหาร (SES/F-PES)</b>
-        <span>ดูตามเดือน พิมพ์/ส่งออกในรูปแบบฟอร์มเดิม</span>
-      </div>
-      <div class="arrow">→</div>
-    </a>
+<!-- ============== APP SHELL ============== -->
+<div id="appShell" style="display:none;">
+  <div class="demo-flag no-print" id="demoFlag" style="display:none;">
+    ⚠️ Demo Mode — ข้อมูลเก็บใน browser นี้เท่านั้น ยังไม่เชื่อมต่อ SharePoint จริง
   </div>
 
-  <div class="foot">SHE Patrol Digital System · ข้อมูลอยู่บน SharePoint List ของ SML · Rules_Confirmed_DateTime บันทึกทุกการปิดงานเพื่อการตรวจสอบย้อนหลัง</div>
+  <header class="topbar no-print">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-badge">SHE</div>
+        <div class="brand-text">
+          <div class="t1">Siam Motors Logistics Co., Ltd.</div>
+          <div class="t2">ระบบบันทึกผลตรวจพื้นที่ (SHE Patrol)</div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div class="user-chip">
+          <span>👤 <b id="userChipName"></b></span>
+          <span class="role-tag" id="userChipRole"></span>
+        </div>
+        <a class="logout-link" id="logoutBtn">ออกจากระบบ</a>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs no-print">
+    <button class="tab-btn active" data-screen="home">หน้าหลัก</button>
+    <button class="tab-btn" data-screen="dashboard">Dashboard</button>
+    <button class="tab-btn" data-screen="report">รายงานผู้บริหาร</button>
+    <button class="tab-btn" data-screen="admin" id="adminTabBtn" style="display:none;">จัดการผู้ใช้งาน</button>
+  </nav>
+
+  <div class="app">
+
+    <!-- ---------- SCREEN: HOME (list + KPI cards) ---------- -->
+    <div id="screen-home">
+      <div class="cards" id="dashCards"></div>
+
+      <div class="toolbar">
+        <div class="field">
+          <label>เดือนที่ตรวจ</label>
+          <input type="month" id="filterMonth">
+        </div>
+        <div class="field">
+          <label>หน่วยงาน/Shop</label>
+          <select id="filterShop">
+            <option value="">ทั้งหมด</option>
+            <option>PDI</option><option>Acc</option><option>Yard</option>
+            <option>Washing</option><option>Touch up</option><option>Store</option><option>อื่นๆ</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Grade</label>
+          <select id="filterGrade">
+            <option value="">ทั้งหมด</option>
+            <option>A</option><option>B</option><option>C</option><option>Others</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>สถานะ</label>
+          <select id="filterStatus">
+            <option value="">ทั้งหมด</option>
+            <option>เปิดใหม่</option><option>รอดำเนินการ</option><option>ดำเนินการแล้ว</option>
+            <option>รอตรวจสอบ</option><option>ปิดงาน</option>
+          </select>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="clearFilterBtn">ล้างตัวกรอง</button>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost" id="exportBtn">⬇ Export CSV</button>
+        <button class="btn btn-accent" id="newFindingBtn">+ บันทึกรายการตรวจใหม่</button>
+      </div>
+
+      <div class="list-header">
+        <h2 id="listTitle">รายการที่พบ</h2>
+        <span class="due-tag" id="listCount"></span>
+      </div>
+
+      <div id="listContainer"><div class="loading">กำลังโหลดข้อมูล...</div></div>
+    </div>
+
+    <!-- ---------- SCREEN: DASHBOARD (charts) ---------- -->
+    <div id="screen-dashboard" style="display:none;">
+      <div class="cards" id="dashCards2"></div>
+      <div class="chart-grid">
+        <div class="chart-card"><h3>สัดส่วนตาม Grade</h3><div class="chart-wrap"><canvas id="gradeChart"></canvas></div></div>
+        <div class="chart-card"><h3>สัดส่วนตาม Category</h3><div class="chart-wrap"><canvas id="categoryChart"></canvas></div></div>
+      </div>
+      <div class="chart-card" style="margin-top:14px;">
+        <h3>อัตราปิดงานตรงเวลาต่อเดือน (%)</h3>
+        <div class="chart-wrap"><canvas id="onTimeChart"></canvas></div>
+      </div>
+      <div class="chart-grid" style="margin-top:14px;">
+        <div class="chart-card">
+          <h3>พื้นที่ที่พบปัญหาซ้ำมากที่สุด (Top 8)</h3>
+          <div class="chart-wrap"><canvas id="areaChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>สรุปตามสถานะ</h3>
+          <ul class="top-list" id="statusList"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- ---------- SCREEN: EXECUTIVE REPORT ---------- -->
+    <div id="screen-report" style="display:none;">
+      <div class="toolbar no-print">
+        <div class="field">
+          <label>เดือน</label>
+          <select id="rptMonth"><option value="">ทั้งหมด</option></select>
+        </div>
+        <div class="field">
+          <label>Shop</label>
+          <select id="rptShop"><option value="">ทั้งหมด</option></select>
+        </div>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost" onclick="window.print()">🖨️ พิมพ์ / บันทึก PDF</button>
+        <button class="btn btn-primary" id="rptExportBtn">⬇ ส่งออก CSV</button>
+      </div>
+      <div class="report-sheet" id="reportSheet"></div>
+    </div>
+
+    <!-- ---------- SCREEN: ADMIN — MANAGE USERS ---------- -->
+    <div id="screen-admin" style="display:none;">
+      <div class="info-banner">
+        Admin เท่านั้นที่เพิ่ม/แก้ไขผู้ใช้งานได้ — เพิ่มชื่อใครก็ได้ในองค์กร ไม่จำเป็นต้องมีบัญชีมาก่อน
+        กำหนด Role ให้แต่ละคนที่นี่ (แทนที่การให้ผู้ใช้เลือก role เอง)
+      </div>
+      <div class="list-header">
+        <h2>ผู้ใช้งานทั้งหมด</h2>
+        <button class="btn btn-accent btn-sm" id="newUserBtn">+ เพิ่มผู้ใช้งาน</button>
+      </div>
+      <div id="usersContainer"><div class="loading">กำลังโหลด...</div></div>
+      <div class="info-banner" style="margin-top:16px;background:var(--gray-pale);color:var(--muted);">
+        📧 การแจ้งเตือนทางอีเมล (finding ใหม่ / รอตรวจสอบ / เลยกำหนด SLA / ปิดงาน) ทำงานอัตโนมัติผ่าน
+        Power Automate เมื่อเชื่อมต่อ SharePoint จริงแล้ว — ดูวิธีตั้งค่าที่โฟลเดอร์ <code>power-automate/</code>
+        ในซอร์สโค้ด ไม่ต้องกดส่งเองในหน้านี้
+      </div>
+    </div>
+
+  </div>
+
+  <div class="storage-note no-print" id="storageNote"></div>
 </div>
 
-<script src="api.js"></script>
+<!-- ============== New Finding Modal ============== -->
+<div class="modal-backdrop" id="newModalBackdrop">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>บันทึกรายการตรวจใหม่</h3>
+      <button class="modal-close" data-close="newModalBackdrop">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="grid2">
+        <div class="field"><label>วันที่ตรวจ *</label><input type="date" id="f_patrolDate"></div>
+        <div class="field"><label>หน่วยงาน/Shop *</label>
+          <select id="f_shop">
+            <option value="">-- เลือก --</option>
+            <option>PDI</option><option>Acc</option><option>Yard</option>
+            <option>Washing</option><option>Touch up</option><option>Store</option><option>อื่นๆ</option>
+          </select>
+        </div>
+        <div class="field full"><label>จุดที่พบ *</label><input type="text" id="f_place" placeholder="เช่น โกดัง B ชั้น 2"></div>
+        <div class="field full"><label>รายละเอียดที่พบ *</label><textarea id="f_description" rows="3" placeholder="อธิบายสภาพที่พบ"></textarea></div>
+        <div class="field"><label>ระดับความเสี่ยง (Grade) *</label>
+          <select id="f_grade">
+            <option value="">-- เลือก --</option>
+            <option value="A">A — เสี่ยงสูง (SLA 7 วัน)</option>
+            <option value="B">B — เสี่ยงปานกลาง (SLA 14 วัน)</option>
+            <option value="C">C — เสี่ยงต่ำ (SLA 30 วัน)</option>
+            <option value="Others">Others — ข้อสังเกต/5S (SLA 30 วัน)</option>
+          </select>
+          <div class="sla-hint" id="f_slaHint"></div>
+        </div>
+        <div class="field"><label>ประเภท (STD)</label>
+          <select id="f_category">
+            <option value="">-- เลือก --</option>
+            <option>F</option><option>S</option><option>EES</option><option>5S</option>
+          </select>
+        </div>
+        <div class="field full">
+          <label>รูปสภาพที่พบ</label>
+          <div class="photo-box">
+            <input type="file" accept="image/*" capture="environment" id="f_photoBefore">
+            <img id="f_photoBeforePreview" style="display:none">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-close="newModalBackdrop">ยกเลิก</button>
+      <button class="btn btn-accent" id="saveNewBtn">บันทึกรายการ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============== Detail Modal ============== -->
+<div class="modal-backdrop" id="detailModalBackdrop">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-head">
+      <h3 id="detailTitle">รายละเอียด Finding</h3>
+      <button class="modal-close" data-close="detailModalBackdrop">✕</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-foot" id="detailFoot"></div>
+  </div>
+</div>
+
+<!-- ============== Close Confirm Modal ============== -->
+<div class="modal-backdrop" id="closeModalBackdrop">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-head"><h3>ยืนยันปิดงาน</h3><button class="modal-close" data-close="closeModalBackdrop">✕</button></div>
+    <div class="modal-body">
+      <p style="font-size:13.5px;color:#4A5568;">การปิดงานถือเป็นหลักฐานยืนยันว่าได้ตรวจสอบมาตรการแก้ไขและรูปหลังแก้ไขแล้ว
+        ระบบจะบันทึกชื่อคุณและเวลาปัจจุบันเป็นหลักฐาน (Rules_Confirmed_DateTime)</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-close="closeModalBackdrop">ยกเลิก</button>
+      <button class="btn btn-primary" id="confirmCloseBtn">ยืนยันปิดงาน</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============== User Add/Edit Modal ============== -->
+<div class="modal-backdrop" id="userModalBackdrop">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-head"><h3 id="userModalTitle">เพิ่มผู้ใช้งาน</h3><button class="modal-close" data-close="userModalBackdrop">✕</button></div>
+    <div class="modal-body">
+      <div class="field"><label>ชื่อ-นามสกุล *</label><input type="text" id="u_name" placeholder="เช่น สมชาย ใจดี"></div>
+      <div class="field"><label>อีเมล *</label><input type="email" id="u_email" placeholder="name@sml.co.th"></div>
+      <div class="field"><label>บทบาท (Role) *</label>
+        <select id="u_role">
+          <option value="SHE-Auditor">SHE-Auditor — ผู้ตรวจ</option>
+          <option value="SHE-Dept-Responsible">SHE-Dept-Responsible — หน่วยงานรับผิดชอบ</option>
+          <option value="SHE-Safety-Admin">SHE-Safety-Admin — Safety Admin</option>
+          <option value="SHE-Executive-Viewer">SHE-Executive-Viewer — ผู้บริหาร (ดูอย่างเดียว)</option>
+        </select>
+      </div>
+      <div class="field" id="u_shopField" style="display:none;"><label>Shop ที่รับผิดชอบ</label>
+        <select id="u_shop">
+          <option value="">-- เลือก --</option>
+          <option>PDI</option><option>Acc</option><option>Yard</option>
+          <option>Washing</option><option>Touch up</option><option>Store</option><option>อื่นๆ</option>
+        </select>
+      </div>
+      <div class="field"><label><input type="checkbox" id="u_active" checked style="width:auto;"> ใช้งานอยู่ (ถอดออกจากรายชื่อ login ถ้าปิด)</label></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-close="userModalBackdrop">ยกเลิก</button>
+      <button class="btn btn-accent" id="saveUserBtn">บันทึก</button>
+    </div>
+  </div>
+</div>
+
 <script>
-  if (!SheAPI.LIVE) {
-    document.getElementById("demoBanner").innerHTML =
-      '<div class="banner warn" style="max-width:820px;margin:0 auto;">⚠️ กำลังใช้งาน <b>Demo Mode</b> (ข้อมูลเก็บใน browser เท่านั้น) — เชื่อมต่อ SharePoint จริงยังไม่พร้อม ' +
-      'กรุณาแก้ SP_CONFIG.SITE_URL ใน <code>api.js</code> หลังรัน provisioning script แล้วเปิดหน้านี้จากภายใน SharePoint site นั้น</div>';
-  }
-</script>
+const SP_CONFIG = {
+  SITE_URL: "https://siammotor.sharepoint.com/sites/Chosiya_Server",
+  LIST_NAME: "SHE_Patrol_Findings",
+  LIBRARY_NAME: "SHE_Patrol_Photos",
+};
 
+const SLA_DAYS = { "A": 7, "B": 14, "C": 30, "Others": 30 };
+const SLA_ESCALATE = {
+  "A": "MGR + AGM/GM ทันทีเมื่อเลยกำหนด",
+  "B": "MGR",
+  "C": "หัวหน้างาน",
+  "Others": "หัวหน้างาน",
+};
+const SHOP_OPTIONS = ["PDI", "Acc", "Yard", "Washing", "Touch up", "Store", "อื่นๆ"];
+const GRADE_OPTIONS = ["A", "B", "C", "Others"];
+const CATEGORY_OPTIONS = ["F", "S", "EES", "5S"];
+const STATUS_OPTIONS = ["เปิดใหม่", "รอดำเนินการ", "ดำเนินการแล้ว", "รอตรวจสอบ", "ปิดงาน"];
+const STATUS_OPEN = ["เปิดใหม่", "รอดำเนินการ", "ดำเนินการแล้ว", "รอตรวจสอบ"];
+
+const ROLE_GROUPS = {
+  "SHE-Auditor": "auditor",
+  "SHE-Dept-Responsible": "dept",
+  "SHE-Safety-Admin": "admin",
+  "SHE-Executive-Viewer": "exec",
+};
+
+function pad(n, len) { return String(n).padStart(len, "0"); }
+
+function addDays(dateStr, days) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function calcDueDate(patrolDate, grade) {
+  const days = SLA_DAYS[grade] || 30;
+  return addDays(patrolDate, days);
+}
+
+function daysUntil(dateStr) {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(dateStr); d.setHours(0, 0, 0, 0);
+  return Math.round((d - today) / 86400000);
+}
+
+function fmtThaiDate(dateStr) {
+  if (!dateStr) return "-";
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" });
+}
+
+function findingCode(item) {
+  const ym = (item.PatrolDate || "").slice(0, 7).replace("-", "");
+  return `SHE-${ym}-${pad(item.Id, 3)}`;
+}
+
+/* ---------------------------------------------------------------------- */
+/* Mode detection                                                          */
+/* ---------------------------------------------------------------------- */
+
+function isLiveMode() {
+  try {
+    const cfgHost = new URL(SP_CONFIG.SITE_URL).hostname;
+    return location.hostname === cfgHost;
+  } catch (e) {
+    return false;
+  }
+}
+
+const SheAPI = (function () {
+  const LIVE = isLiveMode();
+  let digestCache = null;
+
+  /* ---- Demo (localStorage) backend -------------------------------- */
+
+  const DEMO_KEY = "she_patrol_demo_findings";
+  const DEMO_SEED_VERSION = "2026-08-v2";
+
+  function seedDemoData() {
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = [
+      // ข้อมูลจริงจากรอบตรวจ 24 มิ.ย. 2026 (SES/F-PES) — คงคำอธิบายเดิมไว้เป็นตัวอย่าง
+      { PatrolDate: "2026-06-24", Shop: "Acc", Place: "line Acc.", Description: "พบขยะอยู่นอกถังและป้ายมีการชำรุด ไม่ชัดเจน", Grade: "Others", Category: "5S", RootCause: "พบขยะอยู่นอกถัง ป้ายชำรุด", ActionResponsible: "หัวหน้างาน Acc", Countermeasure: "แยกขยะให้ถูกประเภท", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-06-27T09:10:00" },
+      { PatrolDate: "2026-06-24", Shop: "Acc", Place: "line Acc.", Description: "พบขยะอยู่ที่ใต้โต๊ะติดตั้งเบาะ", Grade: "Others", Category: "5S", RootCause: "พบขยะอยูู่ใต้โต๊ะเบาะติดตั้ง และเบาะรองขาดชำรุด", ActionResponsible: "หัวหน้างาน Acc", Countermeasure: "เน้นย้ำการตรวจสอบอุปกรณ์และทำกิจกรรม5ส.", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-06-24", Shop: "Acc", Place: "line Acc.", Description: "อุปกรณ์ชำรุด อยู่ระหว่างจัดซื้อ", Grade: "C", Category: "EES", Countermeasure: "ชำรุด อยู่ระหว่างการใบสั่งซื้ออุปกรณ์แก้ไข", Status: "รอดำเนินการ" },
+      { PatrolDate: "2026-06-24", Shop: "Acc", Place: "line Acc.", Description: "พบข้าวอยู่ที่โต๊ะทำงานและเปิดพัดลมทิ้งไว้", Grade: "Others", Category: "5S", RootCause: "พบการนำอาหารมารับประทานและวางไว้บนโต๊ะทำงาน รวมถึงเปิดพัดลมทิ้งไว้เมื่อไม่มีผู้ใช้งาน", ActionResponsible: "หัวหน้างาน Acc", Countermeasure: "ประชาสัมพันธ์และเน้นย้ำพนักงาน ไม่รับประทานอาหารในพื้นที่ทำงาน และให้ปิดอุปกรณ์ไฟฟ้าทุกครั้งหลังใช้งาน พร้อมตรวจสอบเป็นประจำ", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-06-26T14:20:00" },
+      { PatrolDate: "2026-06-24", Shop: "Acc", Place: "line Acc.", Description: "ไม่มีสัญลักษณ์เตือน", Grade: "C", Category: "S", RootCause: "ไม่มีสัญญลักษณ์เตือน อาจทำให้เดินชนได้", ActionResponsible: "หัวหน้างาน Acc", Countermeasure: "ตรวจสอบเทปให้อยู่สภาพพร้อมใช้งาน", Status: "รอตรวจสอบ" },
+      // ข้อมูลตัวอย่างเพิ่มเติม เม.ย.-ส.ค. 2026 ครบทั้ง 7 Shop (สร้างเพื่อสาธิต dashboard/รายงาน
+      // ไม่ใช่ข้อมูลจริง — สุ่มแบบ deterministic ให้กระจาย Grade/Category/สถานะ/SLA สมจริง)
+      { PatrolDate: "2026-04-27", Shop: "PDI", Place: "PDI Line 2", Description: "เศษวัสดุตกค้างหลังเลิกงาน", Grade: "Others", Category: "5S", RootCause: "ไม่ตรวจสอบพื้นที่ก่อนเลิกกะ", ActionResponsible: "หัวหน้างาน PDI", Countermeasure: "เพิ่ม checklist ตรวจพื้นที่ก่อนเลิกกะ", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-08T10:43:00" },
+      { PatrolDate: "2026-04-06", Shop: "PDI", Place: "คลังอะไหล่ PDI", Description: "เครื่องจักรมีเสียงผิดปกติ ยังไม่ได้ตรวจซ่อม", Grade: "C", Category: "EES", RootCause: "ไม่มีรอบ preventive maintenance", ActionResponsible: "หัวหน้างาน PDI", Countermeasure: "แจ้งซ่อมและวางแผน PM ประจำเครื่อง", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-04-27T16:01:00" },
+      { PatrolDate: "2026-04-09", Shop: "PDI", Place: "PDI Line 1", Description: "พนักงานไม่สวมใส่ PPE ครบตามข้อกำหนด", Grade: "C", Category: "S", RootCause: "พนักงานใหม่ไม่ทราบข้อกำหนด PPE", ActionResponsible: "หัวหน้างาน PDI", Countermeasure: "อบรม PPE ซ้ำ พร้อมสุ่มตรวจรายวัน", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-11T13:12:00" },
+      { PatrolDate: "2026-04-04", Shop: "Acc", Place: "จุดประกอบอุปกรณ์เสริม", Description: "ไม่มีการ์ดครอบเครื่องจักรจุดหมุน", Grade: "Others", Category: "S", RootCause: "การ์ดครอบชำรุดหรือถูกถอดออก", ActionResponsible: "หัวหน้างาน Acc", Countermeasure: "ติดตั้ง/ซ่อมการ์ดครอบให้ครบ ระงับใช้เครื่องจนกว่าจะแก้ไข", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-04-26T14:07:00" },
+      { PatrolDate: "2026-04-06", Shop: "Acc", Place: "จุดประกอบอุปกรณ์เสริม", Description: "ไม่มีการ์ดครอบเครื่องจักรจุดหมุน", Grade: "C", Category: "S", RootCause: "การ์ดครอบชำรุดหรือถูกถอดออก", ActionResponsible: "หัวหน้างาน Acc", Countermeasure: "ติดตั้ง/ซ่อมการ์ดครอบให้ครบ ระงับใช้เครื่องจนกว่าจะแก้ไข", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-04-19T10:31:00" },
+      { PatrolDate: "2026-04-14", Shop: "Acc", Place: "จุดประกอบอุปกรณ์เสริม", Description: "ไม่มีสัญลักษณ์เตือนจุดอันตราย", Grade: "C", Category: "S", RootCause: "ไม่มีสัญลักษณ์เตือน อาจทำให้เดินชนได้", ActionResponsible: "หัวหน้างาน Acc", Countermeasure: "ติดเทปเหลือง-ดำเพิ่มการมองเห็น", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-01T15:22:00" },
+      { PatrolDate: "2026-04-16", Shop: "Yard", Place: "ทางเข้ารับรถ", Description: "อุปกรณ์ทำความสะอาดวางกีดขวางทางเดิน", Grade: "C", Category: "5S", RootCause: "ไม่มีจุดจัดเก็บอุปกรณ์ทำความสะอาด", ActionResponsible: "หัวหน้างาน Yard", Countermeasure: "จัดทำชั้นวางอุปกรณ์ทำความสะอาดเฉพาะจุด", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-04-24T14:31:00" },
+      { PatrolDate: "2026-04-14", Shop: "Yard", Place: "จุดจอดรถบรรทุก", Description: "ทางออกฉุกเฉินมีสิ่งกีดขวาง", Grade: "Others", Category: "F", RootCause: "ใช้พื้นที่หน้าทางออกฉุกเฉินวางของชั่วคราว", ActionResponsible: "หัวหน้างาน Yard", Countermeasure: "เคลียร์พื้นที่และตีเส้นห้ามวางของถาวร", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-05T10:47:00" },
+      { PatrolDate: "2026-04-26", Shop: "Yard", Place: "จุดจอดรถบรรทุก", Description: "วัสดุไวไฟวางใกล้แหล่งความร้อน", Grade: "C", Category: "F", RootCause: "ไม่มีจุดจัดเก็บวัสดุไวไฟเฉพาะ", ActionResponsible: "หัวหน้างาน Yard", Countermeasure: "ย้ายวัสดุไวไฟไปตู้เก็บที่ได้มาตรฐาน", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-05T15:26:00" },
+      { PatrolDate: "2026-04-10", Shop: "Washing", Place: "ทางเดินพนักงานล้างรถ", Description: "อุปกรณ์ไฟฟ้าชำรุด สายไฟเปลือย", Grade: "A", Category: "EES", RootCause: "อุปกรณ์ใช้งานเกินอายุ ไม่มีรอบเปลี่ยน", ActionResponsible: "หัวหน้างาน Washing", Countermeasure: "เปลี่ยนอุปกรณ์ไฟฟ้าที่ชำรุดทันที", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-04-16T10:59:00" },
+      { PatrolDate: "2026-04-24", Shop: "Washing", Place: "จุดล้างรถ", Description: "สายไฟพาดผ่านทางเดิน เสี่ยงสะดุด", Grade: "Others", Category: "S", RootCause: "เดินสายไฟชั่วคราวไม่เก็บเข้าราง", ActionResponsible: "หัวหน้างาน Washing", Countermeasure: "เก็บสายไฟเข้าท่อร้อยสาย ติดป้ายเตือน", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-04-25T16:57:00" },
+      { PatrolDate: "2026-04-22", Shop: "Washing", Place: "ทางเดินพนักงานล้างรถ", Description: "ถังสารเคมีไม่มีฝาปิดหลังใช้งาน", Grade: "B", Category: "EES", RootCause: "พนักงานลืมปิดฝาถังหลังใช้งาน", ActionResponsible: "หัวหน้างาน Washing", Countermeasure: "ทำ checklist ปิดฝาถังก่อนเลิกกะ", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-04-29T09:08:00" },
+      { PatrolDate: "2026-04-07", Shop: "Touch up", Place: "จุดเตรียมสี", Description: "วัสดุไวไฟวางใกล้แหล่งความร้อน", Grade: "B", Category: "F", RootCause: "ไม่มีจุดจัดเก็บวัสดุไวไฟเฉพาะ", ActionResponsible: "หัวหน้างาน Touch up", Countermeasure: "ย้ายวัสดุไวไฟไปตู้เก็บที่ได้มาตรฐาน", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-04-19T11:58:00" },
+      { PatrolDate: "2026-04-03", Shop: "Touch up", Place: "ห้องอบสี", Description: "พื้นลื่น ไม่มีป้ายเตือนพื้นลื่น", Grade: "Others", Category: "S", RootCause: "ไม่มีป้ายเตือนถาวรบริเวณจุดเปียก", ActionResponsible: "หัวหน้างาน Touch up", Countermeasure: "ติดตั้งป้ายเตือนพื้นลื่นถาวร", Status: "รอตรวจสอบ" },
+      { PatrolDate: "2026-04-05", Shop: "Touch up", Place: "จุดเตรียมสี", Description: "ป้ายทางหนีไฟไม่ชัดเจน", Grade: "A", Category: "F", RootCause: "ป้ายซีดจางจากการใช้งานนาน", ActionResponsible: "หัวหน้างาน Touch up", Countermeasure: "เปลี่ยนป้ายทางหนีไฟใหม่แบบสะท้อนแสง", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-04-07T16:49:00" },
+      { PatrolDate: "2026-04-15", Shop: "Store", Place: "ชั้นวางสินค้า A", Description: "ไม่มีสัญลักษณ์เตือนจุดอันตราย", Grade: "C", Category: "S", RootCause: "ไม่มีสัญลักษณ์เตือน อาจทำให้เดินชนได้", ActionResponsible: "หัวหน้างาน Store", Countermeasure: "ติดเทปเหลือง-ดำเพิ่มการมองเห็น", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-04-16T13:04:00" },
+      { PatrolDate: "2026-04-04", Shop: "Store", Place: "ชั้นวางสินค้า A", Description: "ไม่มีการ์ดครอบเครื่องจักรจุดหมุน", Grade: "Others", Category: "S", RootCause: "การ์ดครอบชำรุดหรือถูกถอดออก", ActionResponsible: "หัวหน้างาน Store", Countermeasure: "ติดตั้ง/ซ่อมการ์ดครอบให้ครบ ระงับใช้เครื่องจนกว่าจะแก้ไข", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-04-30T16:37:00" },
+      { PatrolDate: "2026-04-25", Shop: "Store", Place: "จุดรับสินค้า", Description: "วัสดุไวไฟวางใกล้แหล่งความร้อน", Grade: "C", Category: "F", RootCause: "ไม่มีจุดจัดเก็บวัสดุไวไฟเฉพาะ", ActionResponsible: "หัวหน้างาน Store", Countermeasure: "ย้ายวัสดุไวไฟไปตู้เก็บที่ได้มาตรฐาน", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-04-29T11:14:00" },
+      { PatrolDate: "2026-04-24", Shop: "อื่นๆ", Place: "ลานจอดรถพนักงาน", Description: "พื้นลื่น ไม่มีป้ายเตือนพื้นลื่น", Grade: "C", Category: "S", RootCause: "ไม่มีป้ายเตือนถาวรบริเวณจุดเปียก", ActionResponsible: "หัวหน้างาน อื่นๆ", Countermeasure: "ติดตั้งป้ายเตือนพื้นลื่นถาวร", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-20T13:32:00" },
+      { PatrolDate: "2026-04-18", Shop: "อื่นๆ", Place: "โรงอาหาร", Description: "ทางออกฉุกเฉินมีสิ่งกีดขวาง", Grade: "Others", Category: "F", RootCause: "ใช้พื้นที่หน้าทางออกฉุกเฉินวางของชั่วคราว", ActionResponsible: "หัวหน้างาน อื่นๆ", Countermeasure: "เคลียร์พื้นที่และตีเส้นห้ามวางของถาวร", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-04-23T10:55:00" },
+      { PatrolDate: "2026-05-06", Shop: "PDI", Place: "คลังอะไหล่ PDI", Description: "เครื่องจักรมีเสียงผิดปกติ ยังไม่ได้ตรวจซ่อม", Grade: "Others", Category: "EES", RootCause: "ไม่มีรอบ preventive maintenance", ActionResponsible: "หัวหน้างาน PDI", Countermeasure: "แจ้งซ่อมและวางแผน PM ประจำเครื่อง", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-07T16:45:00" },
+      { PatrolDate: "2026-05-06", Shop: "PDI", Place: "PDI Line 2", Description: "เศษวัสดุตกค้างหลังเลิกงาน", Grade: "Others", Category: "5S", RootCause: "ไม่ตรวจสอบพื้นที่ก่อนเลิกกะ", ActionResponsible: "หัวหน้างาน PDI", Countermeasure: "เพิ่ม checklist ตรวจพื้นที่ก่อนเลิกกะ", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-18T14:23:00" },
+      { PatrolDate: "2026-05-09", Shop: "PDI", Place: "PDI Line 1", Description: "พนักงานไม่สวมใส่ PPE ครบตามข้อกำหนด", Grade: "Others", Category: "S", RootCause: "พนักงานใหม่ไม่ทราบข้อกำหนด PPE", ActionResponsible: "หัวหน้างาน PDI", Countermeasure: "อบรม PPE ซ้ำ พร้อมสุ่มตรวจรายวัน", Status: "รอตรวจสอบ" },
+      { PatrolDate: "2026-05-28", Shop: "Acc", Place: "line Acc.", Description: "พบขยะสะสมบริเวณจุดตรวจ", Grade: "Others", Category: "5S", RootCause: "ไม่มีรอบเก็บขยะที่ชัดเจน", ActionResponsible: "หัวหน้างาน Acc", Countermeasure: "จัดรอบเก็บขยะและติดป้ายแยกประเภท", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-06-17T14:15:00" },
+      { PatrolDate: "2026-05-20", Shop: "Acc", Place: "line Acc.", Description: "อุปกรณ์ทำความสะอาดวางกีดขวางทางเดิน", Grade: "C", Category: "5S", RootCause: "ไม่มีจุดจัดเก็บอุปกรณ์ทำความสะอาด", ActionResponsible: "หัวหน้างาน Acc", Countermeasure: "จัดทำชั้นวางอุปกรณ์ทำความสะอาดเฉพาะจุด", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-21T12:21:00" },
+      { PatrolDate: "2026-05-09", Shop: "Acc", Place: "โต๊ะตรวจสอบ Acc", Description: "ไม่มี MSDS ประจำจุดใช้งานสารเคมี", Grade: "Others", Category: "EES", RootCause: "MSDS เดิมสูญหาย", ActionResponsible: "หัวหน้างาน Acc", Countermeasure: "จัดพิมพ์ MSDS ใหม่ติดประจำจุด", Status: "รอตรวจสอบ" },
+      { PatrolDate: "2026-05-15", Shop: "Yard", Place: "ทางเข้ารับรถ", Description: "ของใช้วางไม่เป็นระเบียบบนโต๊ะทำงาน", Grade: "C", Category: "5S", RootCause: "ไม่มี standard การจัดวางของ", ActionResponsible: "หัวหน้างาน Yard", Countermeasure: "ทำ 5ส. และกำหนดจุดวางของให้ชัดเจน", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-06-11T11:22:00" },
+      { PatrolDate: "2026-05-11", Shop: "Yard", Place: "ทางเข้ารับรถ", Description: "พบขยะสะสมบริเวณจุดตรวจ", Grade: "Others", Category: "5S", RootCause: "ไม่มีรอบเก็บขยะที่ชัดเจน", ActionResponsible: "หัวหน้างาน Yard", Countermeasure: "จัดรอบเก็บขยะและติดป้ายแยกประเภท", Status: "รอตรวจสอบ" },
+      { PatrolDate: "2026-05-20", Shop: "Yard", Place: "ลานจอดรถรอส่งมอบ", Description: "สายไฟพาดผ่านทางเดิน เสี่ยงสะดุด", Grade: "Others", Category: "S", RootCause: "เดินสายไฟชั่วคราวไม่เก็บเข้าราง", ActionResponsible: "หัวหน้างาน Yard", Countermeasure: "เก็บสายไฟเข้าท่อร้อยสาย ติดป้ายเตือน", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-23T16:33:00" },
+      { PatrolDate: "2026-05-03", Shop: "Washing", Place: "จุดล้างรถ", Description: "พนักงานไม่สวมใส่ PPE ครบตามข้อกำหนด", Grade: "C", Category: "S", RootCause: "พนักงานใหม่ไม่ทราบข้อกำหนด PPE", ActionResponsible: "หัวหน้างาน Washing", Countermeasure: "อบรม PPE ซ้ำ พร้อมสุ่มตรวจรายวัน", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-06-06T13:36:00" },
+      { PatrolDate: "2026-05-06", Shop: "Washing", Place: "ทางเดินพนักงานล้างรถ", Description: "เครื่องจักรมีเสียงผิดปกติ ยังไม่ได้ตรวจซ่อม", Grade: "Others", Category: "EES", RootCause: "ไม่มีรอบ preventive maintenance", ActionResponsible: "หัวหน้างาน Washing", Countermeasure: "แจ้งซ่อมและวางแผน PM ประจำเครื่อง", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-06-03T12:17:00" },
+      { PatrolDate: "2026-05-09", Shop: "Washing", Place: "บ่อดักไขมัน", Description: "ของใช้วางไม่เป็นระเบียบบนโต๊ะทำงาน", Grade: "C", Category: "5S", RootCause: "ไม่มี standard การจัดวางของ", ActionResponsible: "หัวหน้างาน Washing", Countermeasure: "ทำ 5ส. และกำหนดจุดวางของให้ชัดเจน", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-15T15:22:00" },
+      { PatrolDate: "2026-05-22", Shop: "Touch up", Place: "ห้องพ่นสี", Description: "อุปกรณ์ไฟฟ้าชำรุด สายไฟเปลือย", Grade: "A", Category: "EES", RootCause: "อุปกรณ์ใช้งานเกินอายุ ไม่มีรอบเปลี่ยน", ActionResponsible: "หัวหน้างาน Touch up", Countermeasure: "เปลี่ยนอุปกรณ์ไฟฟ้าที่ชำรุดทันที", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-26T14:39:00" },
+      { PatrolDate: "2026-05-07", Shop: "Touch up", Place: "จุดเตรียมสี", Description: "ถังดับเพลิงหมดอายุ ไม่ได้ตรวจสอบ", Grade: "C", Category: "F", RootCause: "ไม่มีระบบแจ้งเตือนวันหมดอายุ", ActionResponsible: "หัวหน้างาน Touch up", Countermeasure: "จัดทำทะเบียนวันหมดอายุถังดับเพลิงทุกจุด", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-08T09:52:00" },
+      { PatrolDate: "2026-05-25", Shop: "Touch up", Place: "จุดเตรียมสี", Description: "ถังดับเพลิงหมดอายุ ไม่ได้ตรวจสอบ", Grade: "Others", Category: "F", RootCause: "ไม่มีระบบแจ้งเตือนวันหมดอายุ", ActionResponsible: "หัวหน้างาน Touch up", Countermeasure: "จัดทำทะเบียนวันหมดอายุถังดับเพลิงทุกจุด", Status: "รอตรวจสอบ" },
+      { PatrolDate: "2026-05-24", Shop: "Store", Place: "คลังอะไหล่", Description: "อุปกรณ์ทำความสะอาดวางกีดขวางทางเดิน", Grade: "C", Category: "5S", RootCause: "ไม่มีจุดจัดเก็บอุปกรณ์ทำความสะอาด", ActionResponsible: "หัวหน้างาน Store", Countermeasure: "จัดทำชั้นวางอุปกรณ์ทำความสะอาดเฉพาะจุด", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-27T16:21:00" },
+      { PatrolDate: "2026-05-16", Shop: "Store", Place: "จุดรับสินค้า", Description: "ทางออกฉุกเฉินมีสิ่งกีดขวาง", Grade: "Others", Category: "F", RootCause: "ใช้พื้นที่หน้าทางออกฉุกเฉินวางของชั่วคราว", ActionResponsible: "หัวหน้างาน Store", Countermeasure: "เคลียร์พื้นที่และตีเส้นห้ามวางของถาวร", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-31T10:23:00" },
+      { PatrolDate: "2026-05-23", Shop: "Store", Place: "ชั้นวางสินค้า A", Description: "ไม่มีสัญลักษณ์เตือนจุดอันตราย", Grade: "C", Category: "S", RootCause: "ไม่มีสัญลักษณ์เตือน อาจทำให้เดินชนได้", ActionResponsible: "หัวหน้างาน Store", Countermeasure: "ติดเทปเหลือง-ดำเพิ่มการมองเห็น", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-24T11:22:00" },
+      { PatrolDate: "2026-05-05", Shop: "อื่นๆ", Place: "ลานจอดรถพนักงาน", Description: "พื้นลื่น ไม่มีป้ายเตือนพื้นลื่น", Grade: "C", Category: "S", RootCause: "ไม่มีป้ายเตือนถาวรบริเวณจุดเปียก", ActionResponsible: "หัวหน้างาน อื่นๆ", Countermeasure: "ติดตั้งป้ายเตือนพื้นลื่นถาวร", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-05-27T13:32:00" },
+      { PatrolDate: "2026-05-15", Shop: "อื่นๆ", Place: "ลานจอดรถพนักงาน", Description: "พื้นลื่น ไม่มีป้ายเตือนพื้นลื่น", Grade: "C", Category: "S", RootCause: "ไม่มีป้ายเตือนถาวรบริเวณจุดเปียก", ActionResponsible: "หัวหน้างาน อื่นๆ", Countermeasure: "ติดตั้งป้ายเตือนพื้นลื่นถาวร", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-06-05T11:02:00" },
+      { PatrolDate: "2026-06-08", Shop: "PDI", Place: "PDI Line 1", Description: "พนักงานไม่สวมใส่ PPE ครบตามข้อกำหนด", Grade: "C", Category: "S", RootCause: "พนักงานใหม่ไม่ทราบข้อกำหนด PPE", ActionResponsible: "หัวหน้างาน PDI", Countermeasure: "อบรม PPE ซ้ำ พร้อมสุ่มตรวจรายวัน", Status: "รอตรวจสอบ" },
+      { PatrolDate: "2026-06-08", Shop: "PDI", Place: "PDI Line 2", Description: "ไม่มีป้ายชี้บ่งพื้นที่จัดเก็บ", Grade: "A", Category: "5S", RootCause: "ป้ายเดิมหลุด/ชำรุด", ActionResponsible: "หัวหน้างาน PDI", Countermeasure: "จัดทำป้ายชี้บ่งใหม่ติดถาวร", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-06-12", Shop: "PDI", Place: "PDI Line 2", Description: "ของใช้วางไม่เป็นระเบียบบนโต๊ะทำงาน", Grade: "Others", Category: "5S", RootCause: "ไม่มี standard การจัดวางของ", ActionResponsible: "หัวหน้างาน PDI", Countermeasure: "ทำ 5ส. และกำหนดจุดวางของให้ชัดเจน", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-07-06T14:07:00" },
+      { PatrolDate: "2026-06-04", Shop: "Acc", Place: "จุดประกอบอุปกรณ์เสริม", Description: "ไม่มีการ์ดครอบเครื่องจักรจุดหมุน", Grade: "C", Category: "S", RootCause: "การ์ดครอบชำรุดหรือถูกถอดออก", ActionResponsible: "หัวหน้างาน Acc", Countermeasure: "ติดตั้ง/ซ่อมการ์ดครอบให้ครบ ระงับใช้เครื่องจนกว่าจะแก้ไข", Status: "รอตรวจสอบ" },
+      { PatrolDate: "2026-06-07", Shop: "Acc", Place: "โต๊ะตรวจสอบ Acc", Description: "อุปกรณ์ไฟฟ้าชำรุด สายไฟเปลือย", Grade: "Others", Category: "EES", RootCause: "อุปกรณ์ใช้งานเกินอายุ ไม่มีรอบเปลี่ยน", ActionResponsible: "หัวหน้างาน Acc", Countermeasure: "เปลี่ยนอุปกรณ์ไฟฟ้าที่ชำรุดทันที", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-07-01T10:35:00" },
+      { PatrolDate: "2026-06-05", Shop: "Acc", Place: "โต๊ะตรวจสอบ Acc", Description: "ถังสารเคมีไม่มีฝาปิดหลังใช้งาน", Grade: "Others", Category: "EES", RootCause: "พนักงานลืมปิดฝาถังหลังใช้งาน", ActionResponsible: "หัวหน้างาน Acc", Countermeasure: "ทำ checklist ปิดฝาถังก่อนเลิกกะ", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-06-16T09:20:00" },
+      { PatrolDate: "2026-06-16", Shop: "Yard", Place: "จุดจอดรถบรรทุก", Description: "ถังดับเพลิงหมดอายุ ไม่ได้ตรวจสอบ", Grade: "C", Category: "F", RootCause: "ไม่มีระบบแจ้งเตือนวันหมดอายุ", ActionResponsible: "หัวหน้างาน Yard", Countermeasure: "จัดทำทะเบียนวันหมดอายุถังดับเพลิงทุกจุด", Status: "รอตรวจสอบ" },
+      { PatrolDate: "2026-06-17", Shop: "Yard", Place: "ทางเข้ารับรถ", Description: "ของใช้วางไม่เป็นระเบียบบนโต๊ะทำงาน", Grade: "Others", Category: "5S", RootCause: "ไม่มี standard การจัดวางของ", ActionResponsible: "หัวหน้างาน Yard", Countermeasure: "ทำ 5ส. และกำหนดจุดวางของให้ชัดเจน", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-06-24T14:07:00" },
+      { PatrolDate: "2026-06-07", Shop: "Yard", Place: "จุดจอดรถบรรทุก", Description: "ทางออกฉุกเฉินมีสิ่งกีดขวาง", Grade: "A", Category: "F", RootCause: "ใช้พื้นที่หน้าทางออกฉุกเฉินวางของชั่วคราว", ActionResponsible: "หัวหน้างาน Yard", Countermeasure: "เคลียร์พื้นที่และตีเส้นห้ามวางของถาวร", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-06-06", Shop: "Washing", Place: "จุดล้างรถ", Description: "สายไฟพาดผ่านทางเดิน เสี่ยงสะดุด", Grade: "Others", Category: "S", RootCause: "เดินสายไฟชั่วคราวไม่เก็บเข้าราง", ActionResponsible: "หัวหน้างาน Washing", Countermeasure: "เก็บสายไฟเข้าท่อร้อยสาย ติดป้ายเตือน", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-07-05T12:57:00" },
+      { PatrolDate: "2026-06-11", Shop: "Washing", Place: "บ่อดักไขมัน", Description: "ไม่มีป้ายชี้บ่งพื้นที่จัดเก็บ", Grade: "C", Category: "5S", RootCause: "ป้ายเดิมหลุด/ชำรุด", ActionResponsible: "หัวหน้างาน Washing", Countermeasure: "จัดทำป้ายชี้บ่งใหม่ติดถาวร", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-06-20", Shop: "Washing", Place: "บ่อดักไขมัน", Description: "เศษวัสดุตกค้างหลังเลิกงาน", Grade: "Others", Category: "5S", Status: "รอดำเนินการ" },
+      { PatrolDate: "2026-06-13", Shop: "Touch up", Place: "ห้องพ่นสี", Description: "ไม่มี MSDS ประจำจุดใช้งานสารเคมี", Grade: "C", Category: "EES", RootCause: "MSDS เดิมสูญหาย", ActionResponsible: "หัวหน้างาน Touch up", Countermeasure: "จัดพิมพ์ MSDS ใหม่ติดประจำจุด", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-06-21", Shop: "Touch up", Place: "ห้องพ่นสี", Description: "เครื่องจักรมีเสียงผิดปกติ ยังไม่ได้ตรวจซ่อม", Grade: "Others", Category: "EES", RootCause: "ไม่มีรอบ preventive maintenance", ActionResponsible: "หัวหน้างาน Touch up", Countermeasure: "แจ้งซ่อมและวางแผน PM ประจำเครื่อง", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-07-05T12:57:00" },
+      { PatrolDate: "2026-06-09", Shop: "Touch up", Place: "ห้องอบสี", Description: "พื้นลื่น ไม่มีป้ายเตือนพื้นลื่น", Grade: "C", Category: "S", RootCause: "ไม่มีป้ายเตือนถาวรบริเวณจุดเปียก", ActionResponsible: "หัวหน้างาน Touch up", Countermeasure: "ติดตั้งป้ายเตือนพื้นลื่นถาวร", Status: "รอตรวจสอบ" },
+      { PatrolDate: "2026-06-17", Shop: "Store", Place: "คลังอะไหล่", Description: "ไม่มีป้ายชี้บ่งพื้นที่จัดเก็บ", Grade: "C", Category: "5S", RootCause: "ป้ายเดิมหลุด/ชำรุด", ActionResponsible: "หัวหน้างาน Store", Countermeasure: "จัดทำป้ายชี้บ่งใหม่ติดถาวร", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-06-19", Shop: "Store", Place: "คลังอะไหล่", Description: "พบขยะสะสมบริเวณจุดตรวจ", Grade: "Others", Category: "5S", RootCause: "ไม่มีรอบเก็บขยะที่ชัดเจน", ActionResponsible: "หัวหน้างาน Store", Countermeasure: "จัดรอบเก็บขยะและติดป้ายแยกประเภท", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-06-29T10:15:00" },
+      { PatrolDate: "2026-06-05", Shop: "Store", Place: "ชั้นวางสินค้า A", Description: "ไม่มีการ์ดครอบเครื่องจักรจุดหมุน", Grade: "C", Category: "S", RootCause: "การ์ดครอบชำรุดหรือถูกถอดออก", ActionResponsible: "หัวหน้างาน Store", Countermeasure: "ติดตั้ง/ซ่อมการ์ดครอบให้ครบ ระงับใช้เครื่องจนกว่าจะแก้ไข", Status: "รอตรวจสอบ" },
+      { PatrolDate: "2026-06-18", Shop: "อื่นๆ", Place: "โรงอาหาร", Description: "วัสดุไวไฟวางใกล้แหล่งความร้อน", Grade: "C", Category: "F", RootCause: "ไม่มีจุดจัดเก็บวัสดุไวไฟเฉพาะ", ActionResponsible: "หัวหน้างาน อื่นๆ", Countermeasure: "ย้ายวัสดุไวไฟไปตู้เก็บที่ได้มาตรฐาน", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-07-06T15:22:00" },
+      { PatrolDate: "2026-06-04", Shop: "อื่นๆ", Place: "โรงอาหาร", Description: "วัสดุไวไฟวางใกล้แหล่งความร้อน", Grade: "C", Category: "F", RootCause: "ไม่มีจุดจัดเก็บวัสดุไวไฟเฉพาะ", ActionResponsible: "หัวหน้างาน อื่นๆ", Countermeasure: "ย้ายวัสดุไวไฟไปตู้เก็บที่ได้มาตรฐาน", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-07-25", Shop: "PDI", Place: "จุดตรวจสอบคุณภาพ PDI", Description: "วัสดุไวไฟวางใกล้แหล่งความร้อน", Grade: "Others", Category: "F", RootCause: "ไม่มีจุดจัดเก็บวัสดุไวไฟเฉพาะ", ActionResponsible: "หัวหน้างาน PDI", Countermeasure: "ย้ายวัสดุไวไฟไปตู้เก็บที่ได้มาตรฐาน", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-08-21T15:50:00" },
+      { PatrolDate: "2026-07-15", Shop: "PDI", Place: "จุดตรวจสอบคุณภาพ PDI", Description: "วัสดุไวไฟวางใกล้แหล่งความร้อน", Grade: "C", Category: "F", RootCause: "ไม่มีจุดจัดเก็บวัสดุไวไฟเฉพาะ", ActionResponsible: "หัวหน้างาน PDI", Countermeasure: "ย้ายวัสดุไวไฟไปตู้เก็บที่ได้มาตรฐาน", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-07-05", Shop: "PDI", Place: "จุดตรวจสอบคุณภาพ PDI", Description: "วัสดุไวไฟวางใกล้แหล่งความร้อน", Grade: "B", Category: "F", Status: "เปิดใหม่" },
+      { PatrolDate: "2026-07-10", Shop: "Acc", Place: "โต๊ะตรวจสอบ Acc", Description: "เครื่องจักรมีเสียงผิดปกติ ยังไม่ได้ตรวจซ่อม", Grade: "C", Category: "EES", Status: "รอดำเนินการ" },
+      { PatrolDate: "2026-07-11", Shop: "Acc", Place: "line Acc.", Description: "พบขยะสะสมบริเวณจุดตรวจ", Grade: "Others", Category: "5S", RootCause: "ไม่มีรอบเก็บขยะที่ชัดเจน", ActionResponsible: "หัวหน้างาน Acc", Countermeasure: "จัดรอบเก็บขยะและติดป้ายแยกประเภท", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-08-11T11:30:00" },
+      { PatrolDate: "2026-07-19", Shop: "Acc", Place: "โต๊ะตรวจสอบ Acc", Description: "ไม่มี MSDS ประจำจุดใช้งานสารเคมี", Grade: "C", Category: "EES", RootCause: "MSDS เดิมสูญหาย", ActionResponsible: "หัวหน้างาน Acc", Countermeasure: "จัดพิมพ์ MSDS ใหม่ติดประจำจุด", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-07-22", Shop: "Yard", Place: "ทางเข้ารับรถ", Description: "ไม่มีป้ายชี้บ่งพื้นที่จัดเก็บ", Grade: "A", Category: "5S", RootCause: "ป้ายเดิมหลุด/ชำรุด", ActionResponsible: "หัวหน้างาน Yard", Countermeasure: "จัดทำป้ายชี้บ่งใหม่ติดถาวร", Status: "รอตรวจสอบ" },
+      { PatrolDate: "2026-07-16", Shop: "Yard", Place: "ลานจอดรถรอส่งมอบ", Description: "สายไฟพาดผ่านทางเดิน เสี่ยงสะดุด", Grade: "Others", Category: "S", RootCause: "เดินสายไฟชั่วคราวไม่เก็บเข้าราง", ActionResponsible: "หัวหน้างาน Yard", Countermeasure: "เก็บสายไฟเข้าท่อร้อยสาย ติดป้ายเตือน", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-07-25", Shop: "Yard", Place: "ลานจอดรถรอส่งมอบ", Description: "พนักงานไม่สวมใส่ PPE ครบตามข้อกำหนด", Grade: "C", Category: "S", Status: "รอดำเนินการ" },
+      { PatrolDate: "2026-07-20", Shop: "Washing", Place: "บ่อดักไขมัน", Description: "ของใช้วางไม่เป็นระเบียบบนโต๊ะทำงาน", Grade: "Others", Category: "5S", RootCause: "ไม่มี standard การจัดวางของ", ActionResponsible: "หัวหน้างาน Washing", Countermeasure: "ทำ 5ส. และกำหนดจุดวางของให้ชัดเจน", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-07-19", Shop: "Washing", Place: "บ่อดักไขมัน", Description: "อุปกรณ์ทำความสะอาดวางกีดขวางทางเดิน", Grade: "C", Category: "5S", Status: "รอดำเนินการ" },
+      { PatrolDate: "2026-07-09", Shop: "Washing", Place: "จุดล้างรถ", Description: "พนักงานไม่สวมใส่ PPE ครบตามข้อกำหนด", Grade: "C", Category: "S", RootCause: "พนักงานใหม่ไม่ทราบข้อกำหนด PPE", ActionResponsible: "หัวหน้างาน Washing", Countermeasure: "อบรม PPE ซ้ำ พร้อมสุ่มตรวจรายวัน", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-07-26", Shop: "Touch up", Place: "จุดเตรียมสี", Description: "ทางออกฉุกเฉินมีสิ่งกีดขวาง", Grade: "C", Category: "F", Status: "รอดำเนินการ" },
+      { PatrolDate: "2026-07-22", Shop: "Touch up", Place: "ห้องอบสี", Description: "บันไดชำรุด ขั้นบันไดหลวม", Grade: "C", Category: "S", Status: "รอดำเนินการ" },
+      { PatrolDate: "2026-07-14", Shop: "Touch up", Place: "จุดเตรียมสี", Description: "ทางออกฉุกเฉินมีสิ่งกีดขวาง", Grade: "Others", Category: "F", RootCause: "ใช้พื้นที่หน้าทางออกฉุกเฉินวางของชั่วคราว", ActionResponsible: "หัวหน้างาน Touch up", Countermeasure: "เคลียร์พื้นที่และตีเส้นห้ามวางของถาวร", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-07-25T10:55:00" },
+      { PatrolDate: "2026-07-16", Shop: "Store", Place: "ชั้นวางสินค้า A", Description: "ไม่มีการ์ดครอบเครื่องจักรจุดหมุน", Grade: "Others", Category: "S", RootCause: "การ์ดครอบชำรุดหรือถูกถอดออก", ActionResponsible: "หัวหน้างาน Store", Countermeasure: "ติดตั้ง/ซ่อมการ์ดครอบให้ครบ ระงับใช้เครื่องจนกว่าจะแก้ไข", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-07-16", Shop: "Store", Place: "จุดรับสินค้า", Description: "ทางออกฉุกเฉินมีสิ่งกีดขวาง", Grade: "Others", Category: "F", Status: "เปิดใหม่" },
+      { PatrolDate: "2026-07-09", Shop: "Store", Place: "จุดรับสินค้า", Description: "วัสดุไวไฟวางใกล้แหล่งความร้อน", Grade: "Others", Category: "F", RootCause: "ไม่มีจุดจัดเก็บวัสดุไวไฟเฉพาะ", ActionResponsible: "หัวหน้างาน Store", Countermeasure: "ย้ายวัสดุไวไฟไปตู้เก็บที่ได้มาตรฐาน", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-07-27T11:50:00" },
+      { PatrolDate: "2026-07-21", Shop: "อื่นๆ", Place: "ลานจอดรถพนักงาน", Description: "พื้นลื่น ไม่มีป้ายเตือนพื้นลื่น", Grade: "Others", Category: "S", RootCause: "ไม่มีป้ายเตือนถาวรบริเวณจุดเปียก", ActionResponsible: "หัวหน้างาน อื่นๆ", Countermeasure: "ติดตั้งป้ายเตือนพื้นลื่นถาวร", Status: "ปิดงาน", VerifiedBy: "จนท.ความปลอดภัย", Rules_Confirmed_DateTime: "2026-08-12T09:20:00" },
+      { PatrolDate: "2026-07-08", Shop: "อื่นๆ", Place: "สำนักงาน", Description: "ของใช้วางไม่เป็นระเบียบบนโต๊ะทำงาน", Grade: "Others", Category: "5S", RootCause: "ไม่มี standard การจัดวางของ", ActionResponsible: "หัวหน้างาน อื่นๆ", Countermeasure: "ทำ 5ส. และกำหนดจุดวางของให้ชัดเจน", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-08-03", Shop: "PDI", Place: "PDI Line 2", Description: "เศษวัสดุตกค้างหลังเลิกงาน", Grade: "Others", Category: "5S", Status: "เปิดใหม่" },
+      { PatrolDate: "2026-08-03", Shop: "PDI", Place: "PDI Line 2", Description: "อุปกรณ์ทำความสะอาดวางกีดขวางทางเดิน", Grade: "C", Category: "5S", Status: "เปิดใหม่" },
+      { PatrolDate: "2026-08-03", Shop: "PDI", Place: "PDI Line 2", Description: "ไม่มีป้ายชี้บ่งพื้นที่จัดเก็บ", Grade: "A", Category: "5S", Status: "เปิดใหม่" },
+      { PatrolDate: "2026-08-03", Shop: "Acc", Place: "จุดประกอบอุปกรณ์เสริม", Description: "ไม่มีการ์ดครอบเครื่องจักรจุดหมุน", Grade: "Others", Category: "S", Status: "เปิดใหม่" },
+      { PatrolDate: "2026-08-03", Shop: "Acc", Place: "โต๊ะตรวจสอบ Acc", Description: "อุปกรณ์ไฟฟ้าชำรุด สายไฟเปลือย", Grade: "Others", Category: "EES", Status: "เปิดใหม่" },
+      { PatrolDate: "2026-08-03", Shop: "Acc", Place: "line Acc.", Description: "อุปกรณ์ทำความสะอาดวางกีดขวางทางเดิน", Grade: "C", Category: "5S", Status: "เปิดใหม่" },
+      { PatrolDate: "2026-08-03", Shop: "Yard", Place: "ลานจอดรถรอส่งมอบ", Description: "พนักงานไม่สวมใส่ PPE ครบตามข้อกำหนด", Grade: "Others", Category: "S", Status: "รอดำเนินการ" },
+      { PatrolDate: "2026-08-03", Shop: "Yard", Place: "ทางเข้ารับรถ", Description: "เศษวัสดุตกค้างหลังเลิกงาน", Grade: "B", Category: "5S", Status: "เปิดใหม่" },
+      { PatrolDate: "2026-08-03", Shop: "Yard", Place: "ทางเข้ารับรถ", Description: "อุปกรณ์ทำความสะอาดวางกีดขวางทางเดิน", Grade: "C", Category: "5S", Status: "เปิดใหม่" },
+      { PatrolDate: "2026-08-03", Shop: "Washing", Place: "บ่อดักไขมัน", Description: "พบขยะสะสมบริเวณจุดตรวจ", Grade: "Others", Category: "5S", Status: "เปิดใหม่" },
+      { PatrolDate: "2026-08-03", Shop: "Washing", Place: "ทางเดินพนักงานล้างรถ", Description: "ไม่มี MSDS ประจำจุดใช้งานสารเคมี", Grade: "B", Category: "EES", Status: "รอดำเนินการ" },
+      { PatrolDate: "2026-08-03", Shop: "Washing", Place: "ทางเดินพนักงานล้างรถ", Description: "อุปกรณ์ไฟฟ้าชำรุด สายไฟเปลือย", Grade: "C", Category: "EES", Status: "เปิดใหม่" },
+      { PatrolDate: "2026-08-03", Shop: "Touch up", Place: "ห้องอบสี", Description: "บันไดชำรุด ขั้นบันไดหลวม", Grade: "Others", Category: "S", RootCause: "ไม่มีรอบตรวจสอบบันไดประจำ", ActionResponsible: "หัวหน้างาน Touch up", Countermeasure: "ซ่อมบันไดและเพิ่มรอบตรวจสอบรายเดือน", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-08-03", Shop: "Touch up", Place: "ห้องพ่นสี", Description: "เครื่องจักรมีเสียงผิดปกติ ยังไม่ได้ตรวจซ่อม", Grade: "Others", Category: "EES", RootCause: "ไม่มีรอบ preventive maintenance", ActionResponsible: "หัวหน้างาน Touch up", Countermeasure: "แจ้งซ่อมและวางแผน PM ประจำเครื่อง", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-08-03", Shop: "Touch up", Place: "ห้องพ่นสี", Description: "ไม่มี MSDS ประจำจุดใช้งานสารเคมี", Grade: "C", Category: "EES", Status: "รอดำเนินการ" },
+      { PatrolDate: "2026-08-03", Shop: "Store", Place: "คลังอะไหล่", Description: "เศษวัสดุตกค้างหลังเลิกงาน", Grade: "B", Category: "5S", Status: "รอดำเนินการ" },
+      { PatrolDate: "2026-08-03", Shop: "Store", Place: "จุดรับสินค้า", Description: "ป้ายทางหนีไฟไม่ชัดเจน", Grade: "Others", Category: "F", RootCause: "ป้ายซีดจางจากการใช้งานนาน", ActionResponsible: "หัวหน้างาน Store", Countermeasure: "เปลี่ยนป้ายทางหนีไฟใหม่แบบสะท้อนแสง", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-08-03", Shop: "Store", Place: "คลังอะไหล่", Description: "ของใช้วางไม่เป็นระเบียบบนโต๊ะทำงาน", Grade: "C", Category: "5S", Status: "รอดำเนินการ" },
+      { PatrolDate: "2026-08-03", Shop: "อื่นๆ", Place: "สำนักงาน", Description: "อุปกรณ์ทำความสะอาดวางกีดขวางทางเดิน", Grade: "C", Category: "5S", RootCause: "ไม่มีจุดจัดเก็บอุปกรณ์ทำความสะอาด", ActionResponsible: "หัวหน้างาน อื่นๆ", Countermeasure: "จัดทำชั้นวางอุปกรณ์ทำความสะอาดเฉพาะจุด", Status: "ดำเนินการแล้ว" },
+      { PatrolDate: "2026-08-03", Shop: "อื่นๆ", Place: "โรงอาหาร", Description: "ทางออกฉุกเฉินมีสิ่งกีดขวาง", Grade: "Others", Category: "F", Status: "เปิดใหม่" },
+    ];
+    const seeded = rows.map((r, i) => ({
+      Id: i + 1,
+      PhotoBeforeUrl: "",
+      PhotoAfterUrl: "",
+      DueDate: calcDueDate(r.PatrolDate, r.Grade),
+      RootCause: "", ActionResponsible: "", Countermeasure: "",
+      Status: "เปิดใหม่", VerifiedBy: "", Rules_Confirmed_DateTime: "",
+      ...r,
+    }));
+    localStorage.setItem(DEMO_KEY, JSON.stringify(seeded));
+    localStorage.setItem(DEMO_KEY + "_version", DEMO_SEED_VERSION);
+    return seeded;
+  }
+
+  function demoRead() {
+    if (localStorage.getItem(DEMO_KEY + "_version") !== DEMO_SEED_VERSION) return seedDemoData();
+    try {
+      return JSON.parse(localStorage.getItem(DEMO_KEY)) || seedDemoData();
+    } catch (e) { return seedDemoData(); }
+  }
+
+  function demoWrite(rows) { localStorage.setItem(DEMO_KEY, JSON.stringify(rows)); }
+
+  async function demoList() { return demoRead().sort((a, b) => b.Id - a.Id); }
+
+  async function demoGet(id) {
+    const row = demoRead().find(r => r.Id === Number(id));
+    if (!row) throw new Error("ไม่พบข้อมูล finding รหัส " + id);
+    return row;
+  }
+
+  async function demoCreate(fields) {
+    const rows = demoRead();
+    const nextId = rows.reduce((m, r) => Math.max(m, r.Id), 0) + 1;
+    const row = { Id: nextId, PhotoBeforeUrl: "", PhotoAfterUrl: "", RootCause: "", ActionResponsible: "", Countermeasure: "", Status: "เปิดใหม่", VerifiedBy: "", Rules_Confirmed_DateTime: "", ...fields };
+    rows.push(row);
+    demoWrite(rows);
+    return row;
+  }
+
+  async function demoUpdate(id, fields) {
+    const rows = demoRead();
+    const idx = rows.findIndex(r => r.Id === Number(id));
+    if (idx === -1) throw new Error("ไม่พบข้อมูล finding รหัส " + id);
+    rows[idx] = { ...rows[idx], ...fields };
+    demoWrite(rows);
+    return rows[idx];
+  }
+
+  async function demoUploadPhoto(file, findingId, stage) {
+    // demo mode: read as data URL so the photo survives a page refresh via localStorage
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /* ---- Live SharePoint REST backend -------------------------------- */
+
+  function listUrl() {
+    return `${SP_CONFIG.SITE_URL}/_api/web/lists/getbytitle('${SP_CONFIG.LIST_NAME}')`;
+  }
+
+  async function getDigest() {
+    if (digestCache) return digestCache;
+    const res = await fetch(`${SP_CONFIG.SITE_URL}/_api/contextinfo`, {
+      method: "POST",
+      headers: { "Accept": "application/json;odata=verbose" },
+      credentials: "same-origin",
+    });
+    const data = await res.json();
+    digestCache = data.d.GetContextWebInformation.FormDigestValue;
+    return digestCache;
+  }
+
+  async function spFetch(url, opts = {}) {
+    const headers = Object.assign({ "Accept": "application/json;odata=verbose" }, opts.headers || {});
+    const res = await fetch(url, { credentials: "same-origin", ...opts, headers });
+    if (!res.ok) {
+      let msg = res.statusText;
+      try { const j = await res.json(); msg = j.error?.message?.value || msg; } catch (e) {}
+      throw new Error(`SharePoint REST ${res.status}: ${msg}`);
+    }
+    if (res.status === 204) return null;
+    return res.json();
+  }
+
+  async function liveList(filterQuery) {
+    const url = `${listUrl()}/items?$top=500&$orderby=PatrolDate desc` + (filterQuery ? `&${filterQuery}` : "");
+    const data = await spFetch(url);
+    return data.d.results;
+  }
+
+  async function liveGet(id) {
+    const data = await spFetch(`${listUrl()}/items(${id})`);
+    return data.d;
+  }
+
+  async function liveCreate(fields) {
+    const digest = await getDigest();
+    const data = await spFetch(`${listUrl()}/items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json;odata=verbose", "X-RequestDigest": digest },
+      body: JSON.stringify({ __metadata: { type: await listItemType() }, ...fields }),
+    });
+    return data.d;
+  }
+
+  async function liveUpdate(id, fields) {
+    const digest = await getDigest();
+    await spFetch(`${listUrl()}/items(${id})`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json;odata=verbose",
+        "X-RequestDigest": digest,
+        "X-HTTP-Method": "MERGE",
+        "IF-MATCH": "*",
+      },
+      body: JSON.stringify({ __metadata: { type: await listItemType() }, ...fields }),
+    });
+    return liveGet(id);
+  }
+
+  let _itemTypeCache = null;
+  async function listItemType() {
+    if (_itemTypeCache) return _itemTypeCache;
+    const data = await spFetch(`${listUrl()}?$select=ListItemEntityTypeFullName`);
+    _itemTypeCache = data.d.ListItemEntityTypeFullName;
+    return _itemTypeCache;
+  }
+
+  async function ensureUser(loginNameOrEmail) {
+    const digest = await getDigest();
+    const data = await spFetch(`${SP_CONFIG.SITE_URL}/_api/web/ensureuser`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json;odata=verbose", "X-RequestDigest": digest },
+      body: JSON.stringify({ logonName: loginNameOrEmail }),
+    });
+    return data.d; // { Id, LoginName, Title, Email }
+  }
+
+  async function liveUploadPhoto(file, findingId, stage) {
+    const digest = await getDigest();
+    const fileName = `${findingId}_${stage === "ก่อนแก้ไข" ? "before" : "after"}.jpg`;
+    const folderUrl = `${SP_CONFIG.SITE_URL}/_api/web/lists/getbytitle('${SP_CONFIG.LIBRARY_NAME}')/RootFolder`;
+    const folderData = await spFetch(`${folderUrl}?$select=ServerRelativeUrl`);
+    const serverRelUrl = folderData.d.ServerRelativeUrl;
+    const buf = await file.arrayBuffer();
+    const uploadUrl = `${SP_CONFIG.SITE_URL}/_api/web/GetFolderByServerRelativeUrl('${encodeURIComponent(serverRelUrl)}')/Files/add(url='${encodeURIComponent(fileName)}',overwrite=true)`;
+    const uploaded = await spFetch(uploadUrl, {
+      method: "POST",
+      headers: { "X-RequestDigest": digest },
+      body: buf,
+    });
+    const fileServerRelUrl = uploaded.d.ServerRelativeUrl;
+    // set FindingID + PhotoStage metadata on the library item
+    const itemData = await spFetch(`${SP_CONFIG.SITE_URL}/_api/web/GetFileByServerRelativeUrl('${encodeURIComponent(fileServerRelUrl)}')/ListItemAllFields`);
+    const itemType = itemData.d.__metadata.type;
+    await spFetch(`${SP_CONFIG.SITE_URL}/_api/web/GetFileByServerRelativeUrl('${encodeURIComponent(fileServerRelUrl)}')/ListItemAllFields`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json;odata=verbose", "X-RequestDigest": digest, "X-HTTP-Method": "MERGE", "IF-MATCH": "*" },
+      body: JSON.stringify({ __metadata: { type: itemType }, FindingID: String(findingId), PhotoStage: stage }),
+    });
+    return `${SP_CONFIG.SITE_URL}${fileServerRelUrl}`;
+  }
+
+  async function liveCurrentUser() {
+    const data = await spFetch(`${SP_CONFIG.SITE_URL}/_api/web/currentuser`);
+    return data.d;
+  }
+
+  async function liveCurrentUserRole() {
+    try {
+      const data = await spFetch(`${SP_CONFIG.SITE_URL}/_api/web/currentuser/groups`);
+      const titles = data.d.results.map(g => g.Title);
+      for (const [group, role] of Object.entries(ROLE_GROUPS)) {
+        if (titles.some(t => t.includes(group))) return role;
+      }
+    } catch (e) { /* fall through */ }
+    return "viewer";
+  }
+
+  /* ---- public interface --------------------------------------------- */
+
+  return {
+    LIVE,
+    async list(filterQuery) { return LIVE ? liveList(filterQuery) : demoList(); },
+    async get(id) { return LIVE ? liveGet(id) : demoGet(id); },
+    async create(fields) { return LIVE ? liveCreate(fields) : demoCreate(fields); },
+    async update(id, fields) { return LIVE ? liveUpdate(id, fields) : demoUpdate(id, fields); },
+    async uploadPhoto(file, findingId, stage) { return LIVE ? liveUploadPhoto(file, findingId, stage) : demoUploadPhoto(file, findingId, stage); },
+    async ensureUser(login) { return LIVE ? ensureUser(login) : { Id: 0, Title: login, LoginName: login }; },
+    async currentUserRole() { return LIVE ? liveCurrentUserRole() : (localStorage.getItem("she_demo_role") || "admin"); },
+    setDemoRole(role) { localStorage.setItem("she_demo_role", role); },
+  };
+})();
+
+
+/* ======================================================================
+ * SHE_Patrol_Users — parallel demo/live data layer (mirrors SheAPI above)
+ * ====================================================================== */
+const SheUsersAPI = (function () {
+  const LIVE = isLiveMode();
+  const DEMO_KEY = "she_patrol_demo_users";
+  const DEMO_SEED_VERSION = "2026-08-users-v1";
+
+  function seedUsers() {
+    const seeded = [
+      { Id: 1, Name: "จนท.ความปลอดภัย (Admin)", Email: "safety.admin@example-sml.co.th", Role: "SHE-Safety-Admin", Shop: "", Active: true },
+      { Id: 2, Name: "ผู้ตรวจ SHE Committee", Email: "auditor1@example-sml.co.th", Role: "SHE-Auditor", Shop: "", Active: true },
+      { Id: 3, Name: "หัวหน้างาน PDI", Email: "pdi.lead@example-sml.co.th", Role: "SHE-Dept-Responsible", Shop: "PDI", Active: true },
+      { Id: 4, Name: "หัวหน้างาน Acc", Email: "acc.lead@example-sml.co.th", Role: "SHE-Dept-Responsible", Shop: "Acc", Active: true },
+      { Id: 5, Name: "หัวหน้างาน Yard", Email: "yard.lead@example-sml.co.th", Role: "SHE-Dept-Responsible", Shop: "Yard", Active: true },
+      { Id: 6, Name: "ผู้บริหาร SML", Email: "exec.viewer@example-sml.co.th", Role: "SHE-Executive-Viewer", Shop: "", Active: true },
+    ];
+    localStorage.setItem(DEMO_KEY, JSON.stringify(seeded));
+    localStorage.setItem(DEMO_KEY + "_version", DEMO_SEED_VERSION);
+    return seeded;
+  }
+  function demoRead() {
+    if (localStorage.getItem(DEMO_KEY + "_version") !== DEMO_SEED_VERSION) return seedUsers();
+    try { return JSON.parse(localStorage.getItem(DEMO_KEY)) || seedUsers(); } catch (e) { return seedUsers(); }
+  }
+  function demoWrite(rows) { localStorage.setItem(DEMO_KEY, JSON.stringify(rows)); }
+  async function demoList() { return demoRead(); }
+  async function demoCreate(fields) {
+    const rows = demoRead();
+    const nextId = rows.reduce((m, r) => Math.max(m, r.Id), 0) + 1;
+    const row = { Id: nextId, Active: true, Shop: "", ...fields };
+    rows.push(row);
+    demoWrite(rows);
+    return row;
+  }
+  async function demoUpdate(id, fields) {
+    const rows = demoRead();
+    const idx = rows.findIndex(r => r.Id === Number(id));
+    if (idx === -1) throw new Error("ไม่พบผู้ใช้งาน");
+    rows[idx] = { ...rows[idx], ...fields };
+    demoWrite(rows);
+    return rows[idx];
+  }
+
+  function listUrl() { return `${SP_CONFIG.SITE_URL}/_api/web/lists/getbytitle('SHE_Patrol_Users')`; }
+  async function getDigest() {
+    const res = await fetch(`${SP_CONFIG.SITE_URL}/_api/contextinfo`, { method: "POST", headers: { Accept: "application/json;odata=verbose" }, credentials: "same-origin" });
+    const data = await res.json();
+    return data.d.GetContextWebInformation.FormDigestValue;
+  }
+  async function spFetch(url, opts = {}) {
+    const headers = Object.assign({ Accept: "application/json;odata=verbose" }, opts.headers || {});
+    const res = await fetch(url, { credentials: "same-origin", ...opts, headers });
+    if (!res.ok) {
+      let msg = res.statusText;
+      try { const j = await res.json(); msg = j.error?.message?.value || msg; } catch (e) {}
+      throw new Error(`SharePoint REST ${res.status}: ${msg}`);
+    }
+    if (res.status === 204) return null;
+    return res.json();
+  }
+  let _itemType = null;
+  async function listItemType() {
+    if (_itemType) return _itemType;
+    const data = await spFetch(`${listUrl()}?$select=ListItemEntityTypeFullName`);
+    _itemType = data.d.ListItemEntityTypeFullName;
+    return _itemType;
+  }
+  async function liveList() {
+    const data = await spFetch(`${listUrl()}/items?$top=500`);
+    return data.d.results;
+  }
+  async function liveCreate(fields) {
+    const digest = await getDigest();
+    const data = await spFetch(`${listUrl()}/items`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json;odata=verbose", "X-RequestDigest": digest },
+      body: JSON.stringify({ __metadata: { type: await listItemType() }, ...fields }),
+    });
+    return data.d;
+  }
+  async function liveUpdate(id, fields) {
+    const digest = await getDigest();
+    await spFetch(`${listUrl()}/items(${id})`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json;odata=verbose", "X-RequestDigest": digest, "X-HTTP-Method": "MERGE", "IF-MATCH": "*" },
+      body: JSON.stringify({ __metadata: { type: await listItemType() }, ...fields }),
+    });
+    const data = await spFetch(`${listUrl()}/items(${id})`);
+    return data.d;
+  }
+
+  return {
+    LIVE,
+    async list() { return LIVE ? liveList() : demoList(); },
+    async create(fields) { return LIVE ? liveCreate(fields) : demoCreate(fields); },
+    async update(id, fields) { return LIVE ? liveUpdate(id, fields) : demoUpdate(id, fields); },
+  };
+})();
+
+/* ======================================================================
+ * Role helpers, session (login) — Admin assigns Role/Shop via SHE_Patrol_Users,
+ * the signed-in user only picks WHO they are, never their own role.
+ * ====================================================================== */
+const ROLE_MAP = { "SHE-Auditor": "auditor", "SHE-Dept-Responsible": "dept", "SHE-Safety-Admin": "admin", "SHE-Executive-Viewer": "exec" };
+const ROLE_LABELS = { auditor: "ผู้ตรวจ", dept: "หน่วยงานรับผิดชอบ", admin: "Safety Admin", exec: "ผู้บริหาร" };
+function roleShortCode(fullRole) { return ROLE_MAP[fullRole] || "exec"; }
+
+const SESSION_KEY = "she_patrol_current_user";
+function getCurrentUser() { try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch (e) { return null; } }
+function setCurrentUser(u) { sessionStorage.setItem(SESSION_KEY, JSON.stringify(u)); }
+function clearCurrentUser() { sessionStorage.removeItem(SESSION_KEY); }
+function currentRole() { const u = getCurrentUser(); return u ? roleShortCode(u.Role) : "exec"; }
+function canCreate() { return ["auditor", "admin"].includes(currentRole()); }
+function canEditProgress(f) {
+  const r = currentRole();
+  if (r === "admin") return true;
+  if (r === "dept") { const u = getCurrentUser(); return !!(u && u.Shop && u.Shop === f.Shop); }
+  return false;
+}
+function canClose() { return currentRole() === "admin"; }
+function canManageUsers() { return currentRole() === "admin"; }
+
+/* ======================================================================
+ * Utils
+ * ====================================================================== */
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function isOverdueRow(f) { return STATUS_OPEN.includes(f.Status) && daysUntil(f.DueDate) < 0; }
+function fmtDate(s) { return fmtThaiDate(s); }
+function escapeHtml(s) { return (s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+function compressImage(file, maxDim = 1280, quality = 0.75) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > h && w > maxDim) { h = h * (maxDim / w); w = maxDim; }
+        else if (h > maxDim) { w = w * (maxDim / h); h = maxDim; }
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        canvas.toBlob(blob => {
+          resolve(new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }));
+        }, "image/jpeg", quality);
+      };
+      img.onerror = reject;
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ======================================================================
+ * Findings state + list/filter/render (home screen)
+ * ====================================================================== */
+let findings = [];
+let currentDetailId = null;
+let pendingCloseId = null;
+let pendingPhotoAfterFile = null;
+let selectedPhotoBeforeFile = null;
+
+async function loadFindings() { findings = await SheAPI.list(); }
+
+function getFiltered() {
+  const month = document.getElementById("filterMonth").value;
+  const shop = document.getElementById("filterShop").value;
+  const grade = document.getElementById("filterGrade").value;
+  const status = document.getElementById("filterStatus").value;
+  return findings.filter(f =>
+    (!month || f.PatrolDate.startsWith(month)) &&
+    (!shop || f.Shop === shop) &&
+    (!grade || f.Grade === grade) &&
+    (!status || f.Status === status)
+  ).sort((a, b) => b.PatrolDate.localeCompare(a.PatrolDate) || b.Id - a.Id);
+}
+
+function computeKpis(list) {
+  const total = list.length;
+  const open = list.filter(f => f.Status !== "ปิดงาน").length;
+  const overdue = list.filter(isOverdueRow).length;
+  const closed = list.filter(f => f.Status === "ปิดงาน").length;
+  const gradeAOpen = list.filter(f => f.Grade === "A" && f.Status !== "ปิดงาน").length;
+  const onTimeClosed = list.filter(f => f.Status === "ปิดงาน" && (!f.Rules_Confirmed_DateTime || new Date(f.Rules_Confirmed_DateTime) <= new Date(f.DueDate + "T23:59:59")));
+  const rate = closed ? Math.round((onTimeClosed.length / closed) * 100) : 0;
+  return { total, open, overdue, closed, gradeAOpen, rate };
+}
+function renderKpiCards(elId, list) {
+  const k = computeKpis(list);
+  document.getElementById(elId).innerHTML = `
+    <div class="card"><div class="num">${k.total}</div><div class="lbl">รายการทั้งหมด</div></div>
+    <div class="card"><div class="num">${k.open}</div><div class="lbl">ยังไม่ปิดงาน</div></div>
+    <div class="card warn"><div class="num">${k.overdue}</div><div class="lbl">เลยกำหนด</div></div>
+    <div class="card warn"><div class="num">${k.gradeAOpen}</div><div class="lbl">Grade A ที่ยังเปิดอยู่</div></div>
+    <div class="card ok"><div class="num">${k.rate}%</div><div class="lbl">อัตราปิดงานตรงเวลา</div></div>
+  `;
+}
+
+function renderList() {
+  const list = getFiltered();
+  renderKpiCards("dashCards", list);
+  document.getElementById("listCount").textContent = `${list.length} รายการ`;
+  const container = document.getElementById("listContainer");
+  if (!list.length) {
+    container.innerHTML = `<div class="empty">ยังไม่มีรายการตรวจในตัวกรองนี้${canCreate() ? " — กด “+ บันทึกรายการตรวจใหม่” เพื่อเริ่ม" : ""}</div>`;
+    return;
+  }
+  container.innerHTML = list.map(f => {
+    const overdue = isOverdueRow(f);
+    const gradeLetter = f.Grade === "Others" ? "O" : f.Grade;
+    return `
+    <div class="finding-card" data-id="${f.Id}">
+      <div class="fc-left">
+        <div class="grade-chip grade-${f.Grade}">${gradeLetter}</div>
+        <div>
+          <div class="fc-title">${escapeHtml(f.Place || "-")} <span style="color:var(--muted);font-weight:500;">· ${f.Shop}</span></div>
+          <div class="fc-sub">${escapeHtml((f.Description || "").slice(0, 70))}${(f.Description || "").length > 70 ? "…" : ""}</div>
+          <div class="fc-sub">ตรวจวันที่ ${fmtDate(f.PatrolDate)} · รหัส ${findingCode(f)}</div>
+        </div>
+      </div>
+      <div class="fc-right">
+        ${overdue ? `<span class="overdue-tag">เลยกำหนด</span>` : `<span class="due-tag">กำหนด ${fmtDate(f.DueDate)}</span>`}
+        <span class="badge st-${f.Status}">${f.Status}</span>
+      </div>
+    </div>`;
+  }).join("");
+  container.querySelectorAll(".finding-card").forEach(el => {
+    el.addEventListener("click", () => openDetail(el.dataset.id));
+  });
+}
+
+/* ======================================================================
+ * New finding modal
+ * ====================================================================== */
+document.getElementById("f_grade").addEventListener("change", e => {
+  const g = e.target.value;
+  const hint = document.getElementById("f_slaHint");
+  if (!g) { hint.textContent = ""; return; }
+  const pd = document.getElementById("f_patrolDate").value || todayStr();
+  hint.textContent = `กำหนดปิดงานอัตโนมัติ: ${fmtDate(calcDueDate(pd, g))} (SLA ${SLA_DAYS[g]} วัน)`;
+});
+document.getElementById("f_photoBefore").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  selectedPhotoBeforeFile = await compressImage(file);
+  const img = document.getElementById("f_photoBeforePreview");
+  img.src = URL.createObjectURL(selectedPhotoBeforeFile);
+  img.style.display = "block";
+});
+document.getElementById("newFindingBtn").addEventListener("click", () => {
+  if (!canCreate()) { alert("บทบาทปัจจุบันไม่มีสิทธิ์สร้างรายการใหม่ (เฉพาะผู้ตรวจ / Safety Admin)"); return; }
+  document.getElementById("f_patrolDate").value = todayStr();
+  document.getElementById("f_shop").value = "";
+  document.getElementById("f_place").value = "";
+  document.getElementById("f_description").value = "";
+  document.getElementById("f_grade").value = "";
+  document.getElementById("f_category").value = "";
+  document.getElementById("f_slaHint").textContent = "";
+  selectedPhotoBeforeFile = null;
+  const img = document.getElementById("f_photoBeforePreview");
+  img.style.display = "none"; img.removeAttribute("src");
+  document.getElementById("f_photoBefore").value = "";
+  openModal("newModalBackdrop");
+});
+document.getElementById("saveNewBtn").addEventListener("click", async () => {
+  const patrolDate = document.getElementById("f_patrolDate").value;
+  const shop = document.getElementById("f_shop").value;
+  const place = document.getElementById("f_place").value.trim();
+  const description = document.getElementById("f_description").value.trim();
+  const grade = document.getElementById("f_grade").value;
+  const category = document.getElementById("f_category").value;
+  if (!patrolDate || !shop || !place || !description || !grade) { alert("กรุณากรอกข้อมูลที่มี * ให้ครบ"); return; }
+  const btn = document.getElementById("saveNewBtn");
+  btn.disabled = true; btn.textContent = "กำลังบันทึก...";
+  try {
+    const fields = { PatrolDate: patrolDate, Shop: shop, Place: place, Description: description, Grade: grade, Category: category, DueDate: calcDueDate(patrolDate, grade), Status: "เปิดใหม่" };
+    const created = await SheAPI.create(fields);
+    if (selectedPhotoBeforeFile) {
+      const url = await SheAPI.uploadPhoto(selectedPhotoBeforeFile, created.Id, "ก่อนแก้ไข");
+      await SheAPI.update(created.Id, { PhotoBeforeUrl: url });
+    }
+    closeModal("newModalBackdrop");
+    await loadFindings();
+    renderList();
+  } catch (err) {
+    alert("เกิดข้อผิดพลาด: " + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "บันทึกรายการ";
+  }
+});
+
+/* ======================================================================
+ * Detail modal
+ * ====================================================================== */
+async function openDetail(id) {
+  currentDetailId = id;
+  pendingPhotoAfterFile = null;
+  const f = findings.find(x => String(x.Id) === String(id));
+  if (!f) return;
+  document.getElementById("detailTitle").textContent = `${f.Place || "-"} · ${f.Shop}`;
+  const body = document.getElementById("detailBody");
+  const foot = document.getElementById("detailFoot");
+  const editable = canEditProgress(f);
+  const overdue = isOverdueRow(f);
+
+  body.innerHTML = `
+    <div class="detail-row"><div class="k">รหัส Finding</div><div class="v">${findingCode(f)}</div></div>
+    <div class="detail-row"><div class="k">วันที่ตรวจ</div><div class="v">${fmtDate(f.PatrolDate)}</div></div>
+    <div class="detail-row"><div class="k">หน่วยงาน</div><div class="v">${f.Shop}</div></div>
+    <div class="detail-row"><div class="k">Grade / ประเภท</div><div class="v"><span class="badge grade-${f.Grade}" style="display:inline-block">${f.Grade}</span> &nbsp;${f.Category || "-"}</div></div>
+    <div class="detail-row"><div class="k">รายละเอียดที่พบ</div><div class="v">${escapeHtml(f.Description)}</div></div>
+    <div class="detail-row"><div class="k">กำหนดปิดงาน</div><div class="v">${fmtDate(f.DueDate)} ${overdue ? '<span class="overdue-tag">เลยกำหนด</span>' : ""}</div></div>
+    <div class="detail-row"><div class="k">สถานะ</div><div class="v"><span class="badge st-${f.Status}">${f.Status}</span></div></div>
+    <div class="detail-row"><div class="k">รูปสภาพที่พบ</div><div class="v">
+      ${f.PhotoBeforeUrl ? `<img src="${f.PhotoBeforeUrl}" style="max-width:100%;max-height:200px;border-radius:6px;">` : '<span style="color:var(--muted)">ไม่มีรูป</span>'}
+    </div></div>
+
+    <div class="section-title">การแก้ไข (หน่วยงานรับผิดชอบ)</div>
+    ${editable ? `
+      <div class="field full"><label>สาเหตุ (Root cause)</label><textarea id="d_rootCause" rows="2">${escapeHtml(f.RootCause)}</textarea></div>
+      <div class="field full"><label>ผู้รับผิดชอบดำเนินการ</label><input type="text" id="d_actionResponsible" value="${escapeHtml(f.ActionResponsible)}"></div>
+      <div class="field full"><label>มาตรการแก้ไข (Countermeasure)</label><textarea id="d_countermeasure" rows="2">${escapeHtml(f.Countermeasure)}</textarea></div>
+      <div class="field full"><label>รูปหลังแก้ไข</label>
+        <div class="photo-box">
+          <input type="file" accept="image/*" capture="environment" id="d_photoAfter">
+          <img id="d_photoAfterPreview" src="${f.PhotoAfterUrl || ""}" style="${f.PhotoAfterUrl ? "display:block" : "display:none"}">
+        </div>
+      </div>
+    ` : `
+      <div class="detail-row"><div class="k">สาเหตุ</div><div class="v">${escapeHtml(f.RootCause) || "-"}</div></div>
+      <div class="detail-row"><div class="k">ผู้รับผิดชอบ</div><div class="v">${escapeHtml(f.ActionResponsible) || "-"}</div></div>
+      <div class="detail-row"><div class="k">มาตรการแก้ไข</div><div class="v">${escapeHtml(f.Countermeasure) || "-"}</div></div>
+      <div class="detail-row"><div class="k">รูปหลังแก้ไข</div><div class="v">
+        ${f.PhotoAfterUrl ? `<img src="${f.PhotoAfterUrl}" style="max-width:100%;max-height:200px;border-radius:6px;">` : '<span style="color:var(--muted)">ไม่มีรูป</span>'}
+      </div></div>
+    `}
+
+    ${f.Status === "ปิดงาน" ? `
+      <div class="section-title">การปิดงาน</div>
+      <div class="detail-row"><div class="k">ผู้ตรวจสอบปิดงาน</div><div class="v">${escapeHtml(f.VerifiedBy)}</div></div>
+      <div class="detail-row"><div class="k">วันเวลาปิดงาน</div><div class="v">${f.Rules_Confirmed_DateTime ? new Date(f.Rules_Confirmed_DateTime).toLocaleString("th-TH") : "-"}</div></div>
+    ` : ""}
+  `;
+
+  if (editable) {
+    document.getElementById("d_photoAfter").addEventListener("change", async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      pendingPhotoAfterFile = await compressImage(file);
+      const img = document.getElementById("d_photoAfterPreview");
+      img.src = URL.createObjectURL(pendingPhotoAfterFile);
+      img.style.display = "block";
+    });
+  }
+
+  let footHtml = "";
+  if (editable) footHtml += `<button class="btn btn-ghost" id="saveProgressBtn">บันทึกความคืบหน้า</button>`;
+  if (editable && f.Status !== "ปิดงาน") {
+    const nextOptions = STATUS_OPTIONS.filter(s => s !== "ปิดงาน" || canClose());
+    footHtml += `<select id="d_statusChange" class="btn-sm" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);">
+      ${nextOptions.map(s => `<option value="${s}" ${s === f.Status ? "selected" : ""}>${s}</option>`).join("")}
+    </select>`;
+    footHtml += `<button class="btn btn-primary" id="applyStatusBtn">อัปเดตสถานะ</button>`;
+  }
+  foot.innerHTML = footHtml || `<span style="color:var(--muted);font-size:13px;">โหมดดูอย่างเดียว (Read only)</span>`;
+
+  if (document.getElementById("saveProgressBtn")) document.getElementById("saveProgressBtn").addEventListener("click", () => saveProgress(f.Id));
+  if (document.getElementById("applyStatusBtn")) document.getElementById("applyStatusBtn").addEventListener("click", () => applyStatusChange(f.Id));
+
+  openModal("detailModalBackdrop");
+}
+
+async function saveProgress(id) {
+  const f = findings.find(x => String(x.Id) === String(id));
+  if (!f) return;
+  const fields = {
+    RootCause: document.getElementById("d_rootCause").value.trim(),
+    ActionResponsible: document.getElementById("d_actionResponsible").value.trim(),
+    Countermeasure: document.getElementById("d_countermeasure").value.trim(),
+  };
+  const btn = document.getElementById("saveProgressBtn");
+  btn.disabled = true; btn.textContent = "กำลังบันทึก...";
+  try {
+    if (pendingPhotoAfterFile) {
+      const url = await SheAPI.uploadPhoto(pendingPhotoAfterFile, f.Id, "หลังแก้ไข");
+      fields.PhotoAfterUrl = url;
+    }
+    await SheAPI.update(f.Id, fields);
+    pendingPhotoAfterFile = null;
+    await loadFindings();
+    renderList();
+    openDetail(id);
+  } catch (err) {
+    alert("เกิดข้อผิดพลาด: " + err.message);
+  } finally {
+    if (document.getElementById("saveProgressBtn")) {
+      document.getElementById("saveProgressBtn").disabled = false;
+      document.getElementById("saveProgressBtn").textContent = "บันทึกความคืบหน้า";
+    }
+  }
+}
+
+async function applyStatusChange(id) {
+  const f = findings.find(x => String(x.Id) === String(id));
+  const newStatus = document.getElementById("d_statusChange").value;
+  if (newStatus === f.Status) return;
+  if (newStatus === "ปิดงาน") {
+    if (!f.PhotoAfterUrl) { alert('ต้องแนบ "รูปหลังแก้ไข" ก่อนปิดงาน'); return; }
+    pendingCloseId = id;
+    openModal("closeModalBackdrop");
+    return;
+  }
+  try {
+    await SheAPI.update(f.Id, { Status: newStatus });
+    await loadFindings();
+    renderList();
+    openDetail(id);
+  } catch (err) { alert("เกิดข้อผิดพลาด: " + err.message); }
+}
+
+document.getElementById("confirmCloseBtn").addEventListener("click", async () => {
+  const u = getCurrentUser();
+  const f = findings.find(x => String(x.Id) === String(pendingCloseId));
+  if (!f || !u) return;
+  const btn = document.getElementById("confirmCloseBtn");
+  btn.disabled = true; btn.textContent = "กำลังปิดงาน...";
+  try {
+    await SheAPI.update(f.Id, { Status: "ปิดงาน", VerifiedBy: u.Name, Rules_Confirmed_DateTime: new Date().toISOString() });
+    closeModal("closeModalBackdrop");
+    await loadFindings();
+    renderList();
+    const idToReopen = pendingCloseId;
+    pendingCloseId = null;
+    openDetail(idToReopen);
+  } catch (err) {
+    alert("เกิดข้อผิดพลาด: " + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "ยืนยันปิดงาน";
+  }
+});
+
+/* ======================================================================
+ * Export CSV (shared by home screen + report screen)
+ * ====================================================================== */
+function exportRowsToCsv(list, filename) {
+  if (!list.length) { alert("ไม่มีข้อมูลให้ export ในตัวกรองนี้"); return; }
+  const headers = ["No", "วันที่ตรวจ", "หน่วยงาน", "จุดที่พบ", "รายละเอียด", "Grade", "ประเภท", "กำหนดปิดงาน", "สาเหตุ", "ผู้รับผิดชอบ", "มาตรการแก้ไข", "สถานะ", "ผู้ตรวจสอบปิดงาน", "วันเวลาปิดงาน"];
+  const rows = list.map((f, i) => [
+    i + 1, f.PatrolDate, f.Shop, f.Place, f.Description, f.Grade, f.Category, f.DueDate,
+    f.RootCause, f.ActionResponsible, f.Countermeasure, f.Status, f.VerifiedBy,
+    f.Rules_Confirmed_DateTime ? new Date(f.Rules_Confirmed_DateTime).toLocaleString("th-TH") : "",
+  ]);
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  a.click(); URL.revokeObjectURL(url);
+}
+document.getElementById("exportBtn").addEventListener("click", () => exportRowsToCsv(getFiltered(), `SHE_Patrol_Export_${todayStr()}.csv`));
+
+/* ======================================================================
+ * Modal helpers
+ * ====================================================================== */
+function openModal(id) { document.getElementById(id).classList.add("show"); }
+function closeModal(id) { document.getElementById(id).classList.remove("show"); }
+document.querySelectorAll("[data-close]").forEach(btn => btn.addEventListener("click", () => closeModal(btn.dataset.close)));
+document.querySelectorAll(".modal-backdrop").forEach(bd => bd.addEventListener("click", e => { if (e.target === bd) closeModal(bd.id); }));
+
+/* ======================================================================
+ * Filters wiring
+ * ====================================================================== */
+["filterMonth", "filterShop", "filterGrade", "filterStatus"].forEach(id => document.getElementById(id).addEventListener("change", renderList));
+document.getElementById("clearFilterBtn").addEventListener("click", () => {
+  document.getElementById("filterMonth").value = "";
+  document.getElementById("filterShop").value = "";
+  document.getElementById("filterGrade").value = "";
+  document.getElementById("filterStatus").value = "";
+  renderList();
+});
+
+/* ======================================================================
+ * Nav tabs
+ * ====================================================================== */
+function switchScreen(name) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.screen === name));
+  ["home", "dashboard", "report", "admin"].forEach(s => {
+    document.getElementById("screen-" + s).style.display = s === name ? "block" : "none";
+  });
+  if (name === "dashboard") renderDashboardCharts();
+  if (name === "report") renderReport();
+  if (name === "admin") {
+    if (!canManageUsers()) { alert("เฉพาะ Admin เท่านั้นที่เข้าเมนูนี้ได้"); switchScreen("home"); return; }
+    renderUsersTable();
+  }
+}
+document.querySelectorAll(".tab-btn").forEach(btn => btn.addEventListener("click", () => switchScreen(btn.dataset.screen)));
+
+/* ======================================================================
+ * Dashboard charts
+ * ====================================================================== */
+let chartInstances = {};
+function destroyCharts() { Object.values(chartInstances).forEach(c => c && c.destroy()); chartInstances = {}; }
+function countBy(rows, keyFn) { const m = {}; rows.forEach(r => { const k = keyFn(r); m[k] = (m[k] || 0) + 1; }); return m; }
+const GRADE_PALETTE = { A: "#C00000", B: "#C05621", C: "#1F3864", Others: "#718096" };
+const CAT_PALETTE = { F: "#C00000", S: "#1F3864", EES: "#2F855A", "5S": "#B7791F" };
+
+function renderDashboardCharts() {
+  const rows = findings;
+  renderKpiCards("dashCards2", rows);
+  destroyCharts();
+
+  const gradeCounts = countBy(rows, r => r.Grade);
+  chartInstances.grade = new Chart(document.getElementById("gradeChart"), {
+    type: "doughnut",
+    data: { labels: GRADE_OPTIONS, datasets: [{ data: GRADE_OPTIONS.map(g => gradeCounts[g] || 0), backgroundColor: GRADE_OPTIONS.map(g => GRADE_PALETTE[g]) }] },
+    options: { plugins: { legend: { position: "bottom" } }, maintainAspectRatio: false },
+  });
+
+  const catCounts = countBy(rows, r => r.Category || "ไม่ระบุ");
+  const catLabels = Object.keys(catCounts);
+  chartInstances.category = new Chart(document.getElementById("categoryChart"), {
+    type: "doughnut",
+    data: { labels: catLabels, datasets: [{ data: catLabels.map(c => catCounts[c]), backgroundColor: catLabels.map(c => CAT_PALETTE[c] || "#999") }] },
+    options: { plugins: { legend: { position: "bottom" } }, maintainAspectRatio: false },
+  });
+
+  const closed = rows.filter(r => r.Status === "ปิดงาน");
+  const months = [...new Set(rows.map(r => r.PatrolDate.slice(0, 7)))].sort();
+  const rateByMonth = months.map(m => {
+    const mc = closed.filter(r => r.PatrolDate.slice(0, 7) === m);
+    if (!mc.length) return null;
+    const onTime = mc.filter(r => !r.Rules_Confirmed_DateTime || new Date(r.Rules_Confirmed_DateTime) <= new Date(r.DueDate + "T23:59:59"));
+    return Math.round((onTime.length / mc.length) * 100);
+  });
+  chartInstances.onTime = new Chart(document.getElementById("onTimeChart"), {
+    type: "bar",
+    data: { labels: months, datasets: [{ label: "% ปิดงานตรงเวลา", data: rateByMonth, backgroundColor: "#1F3864", borderRadius: 6 }] },
+    options: { maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 100 } }, plugins: { legend: { display: false } } },
+  });
+
+  const areaCounts = countBy(rows, r => `${r.Shop} — ${r.Place || "ไม่ระบุจุด"}`);
+  const topAreas = Object.entries(areaCounts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  chartInstances.area = new Chart(document.getElementById("areaChart"), {
+    type: "bar",
+    data: { labels: topAreas.map(a => a[0]), datasets: [{ label: "จำนวนครั้งที่พบ", data: topAreas.map(a => a[1]), backgroundColor: "#C00000", borderRadius: 6 }] },
+    options: { indexAxis: "y", maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } },
+  });
+
+  const statusCounts = countBy(rows, r => r.Status);
+  document.getElementById("statusList").innerHTML = STATUS_OPTIONS.map(s => `<li><span>${s}</span><span class="cnt">${statusCounts[s] || 0}</span></li>`).join("");
+}
+
+/* ======================================================================
+ * Executive report (SES/F-PES)
+ * ====================================================================== */
+function fillSelectOnce(id, options) {
+  const sel = document.getElementById(id);
+  if (sel.dataset.filled) return;
+  options.forEach(o => { const opt = document.createElement("option"); opt.value = o; opt.textContent = o; sel.appendChild(opt); });
+  sel.dataset.filled = "1";
+}
+function reportFilteredRows() {
+  const month = document.getElementById("rptMonth").value;
+  const shop = document.getElementById("rptShop").value;
+  return findings.filter(r => (!month || r.PatrolDate.slice(0, 7) === month) && (!shop || r.Shop === shop))
+    .sort((a, b) => a.PatrolDate.localeCompare(b.PatrolDate) || a.Id - b.Id);
+}
+function renderReport() {
+  const months = [...new Set(findings.map(r => r.PatrolDate.slice(0, 7)))].sort().reverse();
+  fillSelectOnce("rptMonth", months);
+  fillSelectOnce("rptShop", SHOP_OPTIONS);
+  const rows = reportFilteredRows();
+  const monthLabel = document.getElementById("rptMonth").value
+    ? new Date(document.getElementById("rptMonth").value + "-01").toLocaleDateString("th-TH", { year: "numeric", month: "long" })
+    : "ทุกเดือน";
+  document.getElementById("reportSheet").innerHTML = `
+    <div class="report-head">
+      <div class="title">( SES / F-PES ) Report of findings</div>
+      <div style="font-size:11px;color:var(--muted);">รอบรายงาน: ${monthLabel}${document.getElementById("rptShop").value ? " · Shop: " + document.getElementById("rptShop").value : ""}</div>
+    </div>
+    <table class="rtbl">
+      <thead><tr><th>No</th><th>Shop</th><th>Place</th><th>Description</th><th>Grade</th><th>STD</th><th>Due Date</th><th>Root cause</th><th>Action/Responsible</th><th>Countermeasure</th><th>Status</th></tr></thead>
+      <tbody>
+        ${rows.map((r, i) => `<tr>
+          <td>${i + 1}</td><td>${r.Shop}</td><td>${r.Place || "-"}</td><td>${escapeHtml(r.Description)}</td>
+          <td>${r.Grade}</td><td>${r.Category || "-"}</td><td>${fmtDate(r.DueDate)}</td>
+          <td>${escapeHtml(r.RootCause) || "-"}</td><td>${escapeHtml(r.ActionResponsible) || "-"}</td>
+          <td>${escapeHtml(r.Countermeasure) || "-"}</td><td>${r.Status}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>
+    <div class="sign-row">
+      <div>MGR.<br>Date: __________</div><div>AGM / GM<br>Date: __________</div>
+      <div>SAFETY<br>Date: __________</div><div>VP (only A grade)<br>Date: __________</div>
+    </div>
+  `;
+}
+document.getElementById("rptExportBtn").addEventListener("click", () => exportRowsToCsv(reportFilteredRows(), `SHE_Patrol_Report_${document.getElementById("rptMonth").value || "all"}.csv`));
+["rptMonth", "rptShop"].forEach(id => document.getElementById(id).addEventListener("change", renderReport));
+
+/* ======================================================================
+ * Admin — manage users
+ * ====================================================================== */
+async function renderUsersTable() {
+  const users = await SheUsersAPI.list();
+  const container = document.getElementById("usersContainer");
+  if (!users.length) { container.innerHTML = '<div class="empty">ยังไม่มีผู้ใช้งาน</div>'; return; }
+  container.innerHTML = `
+    <table class="users-table">
+      <thead><tr><th>ชื่อ</th><th>อีเมล</th><th>บทบาท</th><th>Shop</th><th>สถานะ</th><th></th></tr></thead>
+      <tbody>
+        ${users.map(u => {
+          const code = roleShortCode(u.Role);
+          return `<tr>
+            <td>${escapeHtml(u.Name)}</td>
+            <td>${escapeHtml(u.Email)}</td>
+            <td><span class="role-badge ${code}">${ROLE_LABELS[code]}</span></td>
+            <td>${u.Shop || "-"}</td>
+            <td><span class="active-dot ${u.Active ? "" : "off"}"></span> ${u.Active ? "ใช้งาน" : "ปิดใช้งาน"}</td>
+            <td><button class="btn btn-ghost btn-sm" data-edit-user="${u.Id}">แก้ไข</button></td>
+          </tr>`;
+        }).join("")}
+      </tbody>
+    </table>
+  `;
+  container.querySelectorAll("[data-edit-user]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const users2 = await SheUsersAPI.list();
+      const u = users2.find(x => String(x.Id) === btn.dataset.editUser);
+      openUserModal(u);
+    });
+  });
+}
+
+let editingUserId = null;
+function toggleShopField() {
+  document.getElementById("u_shopField").style.display = document.getElementById("u_role").value === "SHE-Dept-Responsible" ? "block" : "none";
+}
+document.getElementById("u_role").addEventListener("change", toggleShopField);
+
+function openUserModal(u) {
+  editingUserId = u ? u.Id : null;
+  document.getElementById("userModalTitle").textContent = u ? "แก้ไขผู้ใช้งาน" : "เพิ่มผู้ใช้งาน";
+  document.getElementById("u_name").value = u ? u.Name : "";
+  document.getElementById("u_email").value = u ? u.Email : "";
+  document.getElementById("u_role").value = u ? u.Role : "SHE-Auditor";
+  document.getElementById("u_shop").value = u ? u.Shop || "" : "";
+  document.getElementById("u_active").checked = u ? !!u.Active : true;
+  toggleShopField();
+  openModal("userModalBackdrop");
+}
+document.getElementById("newUserBtn").addEventListener("click", () => openUserModal(null));
+document.getElementById("saveUserBtn").addEventListener("click", async () => {
+  const name = document.getElementById("u_name").value.trim();
+  const email = document.getElementById("u_email").value.trim();
+  const role = document.getElementById("u_role").value;
+  const shop = role === "SHE-Dept-Responsible" ? document.getElementById("u_shop").value : "";
+  const active = document.getElementById("u_active").checked;
+  if (!name || !email) { alert("กรุณากรอกชื่อและอีเมล"); return; }
+  const btn = document.getElementById("saveUserBtn");
+  btn.disabled = true; btn.textContent = "กำลังบันทึก...";
+  try {
+    const fields = { Name: name, Email: email, Role: role, Shop: shop, Active: active };
+    if (editingUserId) await SheUsersAPI.update(editingUserId, fields);
+    else await SheUsersAPI.create(fields);
+    closeModal("userModalBackdrop");
+    await renderUsersTable();
+  } catch (err) {
+    alert("เกิดข้อผิดพลาด: " + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "บันทึก";
+  }
+});
+
+/* ======================================================================
+ * Login / session bootstrap
+ * ====================================================================== */
+let loginUsersCache = [];
+async function populateLoginSelect() {
+  loginUsersCache = await SheUsersAPI.list();
+  const active = loginUsersCache.filter(u => u.Active);
+  const sel = document.getElementById("loginUserSelect");
+  if (!active.length) { sel.innerHTML = '<option value="">— ยังไม่มีผู้ใช้งาน ติดต่อ Safety Admin —</option>'; return; }
+  sel.innerHTML = active.map(u => `<option value="${u.Id}">${escapeHtml(u.Name)} — ${ROLE_LABELS[roleShortCode(u.Role)]}</option>`).join("");
+}
+document.getElementById("loginBtn").addEventListener("click", () => {
+  const id = document.getElementById("loginUserSelect").value;
+  if (!id) { document.getElementById("loginMsg").textContent = "กรุณาเลือกชื่อของคุณ"; return; }
+  const u = loginUsersCache.find(x => String(x.Id) === String(id));
+  if (!u) return;
+  setCurrentUser(u);
+  showApp();
+});
+document.getElementById("logoutBtn").addEventListener("click", () => { clearCurrentUser(); location.reload(); });
+
+function maybeOpenDeepLink() {
+  const params = new URLSearchParams(location.search);
+  const id = params.get("id");
+  if (id && findings.find(f => String(f.Id) === String(id))) openDetail(id);
+}
+
+async function showApp() {
+  const u = getCurrentUser();
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("appShell").style.display = "block";
+  document.getElementById("userChipName").textContent = u.Name;
+  document.getElementById("userChipRole").textContent = ROLE_LABELS[roleShortCode(u.Role)];
+  if (canManageUsers()) document.getElementById("adminTabBtn").style.display = "";
+  if (!SheAPI.LIVE) document.getElementById("demoFlag").style.display = "block";
+  document.getElementById("storageNote").textContent = SheAPI.LIVE
+    ? "เชื่อมต่อ SharePoint List จริง — ข้อมูลนี้ share กับทุกคนที่ใช้ระบบ"
+    : "Demo Mode — ข้อมูลเก็บใน browser นี้เท่านั้น ยังไม่ share ข้ามเครื่อง จนกว่าจะเชื่อมต่อ SharePoint จริง";
+  if (currentRole() === "dept" && u.Shop) document.getElementById("filterShop").value = u.Shop;
+  await loadFindings();
+  renderList();
+  maybeOpenDeepLink();
+}
+
+(async function initAuth() {
+  await populateLoginSelect();
+  const existing = getCurrentUser();
+  if (existing) await showApp();
+})();
+
+</script>
 </body>
 </html>
