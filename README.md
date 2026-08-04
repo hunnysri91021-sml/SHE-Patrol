@@ -66,7 +66,7 @@
 
 ```powershell
 Install-Module -Name PnP.PowerShell -Scope CurrentUser   # ครั้งแรกเท่านั้น
-./Create-SHEPatrolList.ps1 -SiteUrl "https://siammotors.sharepoint.com/sites/SHEPatrol"
+./Create-SHEPatrolList.ps1 -SiteUrl "https://siammotor.sharepoint.com/sites/Chosiya_Server"
 ```
 
 สคริปต์จะพิมพ์หมายเหตุท้ายรันเกี่ยวกับข้อจำกัดของ SharePoint permission group ในการจำกัด

@@ -13,10 +13,10 @@
         Install-Module -Name PnP.PowerShell -Scope CurrentUser
 
 .PARAMETER SiteUrl
-    Full URL of the target SharePoint site, e.g. https://siammotors.sharepoint.com/sites/SHEPatrol
+    Full URL of the target SharePoint site, e.g. https://siammotor.sharepoint.com/sites/Chosiya_Server
 
 .EXAMPLE
-    ./Create-SHEPatrolList.ps1 -SiteUrl "https://siammotors.sharepoint.com/sites/SHEPatrol"
+    ./Create-SHEPatrolList.ps1 -SiteUrl "https://siammotor.sharepoint.com/sites/Chosiya_Server"
 #>
 
 param(

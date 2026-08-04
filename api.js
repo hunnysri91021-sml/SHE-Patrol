@@ -11,8 +11,7 @@
  */
 
 const SP_CONFIG = {
-  // TODO: แก้เป็น URL จริงของ SharePoint site หลังรัน Create-SHEPatrolList.ps1
-  SITE_URL: "https://siammotors.sharepoint.com/sites/SHEPatrol",
+  SITE_URL: "https://siammotor.sharepoint.com/sites/Chosiya_Server",
   LIST_NAME: "SHE_Patrol_Findings",
   LIBRARY_NAME: "SHE_Patrol_Photos",
 };
