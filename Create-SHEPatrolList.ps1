@@ -1,0 +1,176 @@
+<#
+.SYNOPSIS
+    Provisions the SHE Patrol Digital System on a SharePoint Online site:
+    - List: SHE_Patrol_Findings (16 columns)
+    - Document Library: SHE_Patrol_Photos (FindingID, PhotoStage columns)
+    - 4 permission groups: SHE-Auditor, SHE-Dept-Responsible, SHE-Safety-Admin, SHE-Executive-Viewer
+
+.DESCRIPTION
+    Idempotent — safe to re-run. Every list/library/field/group is created only if it
+    does not already exist; existing objects are left untouched.
+
+    Requires the PnP.PowerShell module:
+        Install-Module -Name PnP.PowerShell -Scope CurrentUser
+
+.PARAMETER SiteUrl
+    Full URL of the target SharePoint site, e.g. https://siammotors.sharepoint.com/sites/SHEPatrol
+
+.EXAMPLE
+    ./Create-SHEPatrolList.ps1 -SiteUrl "https://siammotors.sharepoint.com/sites/SHEPatrol"
+#>
+
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$SiteUrl
+)
+
+$ErrorActionPreference = "Stop"
+
+if (-not (Get-Module -ListAvailable -Name PnP.PowerShell)) {
+    Write-Host "PnP.PowerShell module not found. Installing for current user..." -ForegroundColor Yellow
+    Install-Module -Name PnP.PowerShell -Scope CurrentUser -Force -AllowClobber
+}
+Import-Module PnP.PowerShell
+
+Write-Host "Connecting to $SiteUrl ..." -ForegroundColor Cyan
+Connect-PnPOnline -Url $SiteUrl -Interactive
+
+# --------------------------------------------------------------------------
+# 1. List: SHE_Patrol_Findings
+# --------------------------------------------------------------------------
+
+$listName = "SHE_Patrol_Findings"
+
+$list = Get-PnPList -Identity $listName -ErrorAction SilentlyContinue
+if (-not $list) {
+    Write-Host "Creating list '$listName' ..." -ForegroundColor Cyan
+    $list = New-PnPList -Title $listName -Template GenericList -EnableVersioning -OnQuickLaunch
+} else {
+    Write-Host "List '$listName' already exists — skipping creation." -ForegroundColor DarkGray
+}
+
+# Field definitions: InternalName, DisplayName, Type, ExtraArgs (hashtable of Add-PnPField params)
+$findingFields = @(
+    @{ Name = "PatrolDate";               Display = "วันที่ตรวจ (Patrol Date)";              Type = "DateTime" }
+    @{ Name = "Shop";                      Display = "Shop";                                    Type = "Choice"; Choices = @("PDI","Acc","Yard","Washing","Touch up","Store","อื่นๆ") }
+    @{ Name = "Place";                     Display = "จุดที่พบ (Place)";                        Type = "Text" }
+    @{ Name = "Description";               Display = "รายละเอียด (Description)";               Type = "Note" }
+    @{ Name = "Grade";                     Display = "Grade";                                   Type = "Choice"; Choices = @("A","B","C","Others") }
+    @{ Name = "Category";                  Display = "Category";                                Type = "Choice"; Choices = @("F","S","EES","5S") }
+    @{ Name = "PhotoBeforeUrl";            Display = "รูปก่อนแก้ไข (Photo Before)";            Type = "URL" }
+    @{ Name = "DueDate";                   Display = "กำหนดเสร็จ (Due Date)";                  Type = "DateTime" }
+    @{ Name = "RootCause";                 Display = "สาเหตุ (Root Cause)";                    Type = "Note" }
+    @{ Name = "ActionResponsible";         Display = "ผู้รับผิดชอบ (Action / Responsible)";    Type = "User" }
+    @{ Name = "Countermeasure";            Display = "มาตรการแก้ไข (Countermeasure)";         Type = "Note" }
+    @{ Name = "PhotoAfterUrl";             Display = "รูปหลังแก้ไข (Photo After)";             Type = "URL" }
+    @{ Name = "Status";                    Display = "สถานะ (Status)";                         Type = "Choice"; Choices = @("เปิดใหม่","รอดำเนินการ","ดำเนินการแล้ว","รอตรวจสอบ","ปิดงาน") }
+    @{ Name = "VerifiedBy";                Display = "ผู้ตรวจยืนยัน (Verified By)";             Type = "User" }
+    @{ Name = "Rules_Confirmed_DateTime";  Display = "เวลาที่ยืนยันปิดงาน (Rules Confirmed)";  Type = "DateTime"; DisplayFormat = "DateTime" }
+)
+
+foreach ($f in $findingFields) {
+    $existing = Get-PnPField -List $listName -Identity $f.Name -ErrorAction SilentlyContinue
+    if ($existing) {
+        Write-Host "  Field '$($f.Name)' already exists — skipping." -ForegroundColor DarkGray
+        continue
+    }
+    Write-Host "  Adding field '$($f.Name)' ($($f.Type)) ..." -ForegroundColor Cyan
+    switch ($f.Type) {
+        "Choice" {
+            Add-PnPField -List $listName -DisplayName $f.Display -InternalName $f.Name -Type Choice -Choices $f.Choices -AddToDefaultView | Out-Null
+        }
+        default {
+            Add-PnPField -List $listName -DisplayName $f.Display -InternalName $f.Name -Type $f.Type -AddToDefaultView | Out-Null
+        }
+    }
+    if ($f.Type -eq "DateTime") {
+        $format = if ($f.DisplayFormat) { $f.DisplayFormat } else { "DateOnly" }
+        Set-PnPField -List $listName -Identity $f.Name -Values @{ DisplayFormat = $format } | Out-Null
+    }
+}
+
+# Default Status to "เปิดใหม่" for new items
+$statusField = Get-PnPField -List $listName -Identity "Status" -ErrorAction SilentlyContinue
+if ($statusField -and -not $statusField.DefaultValue) {
+    Set-PnPField -List $listName -Identity "Status" -Values @{ DefaultValue = "เปิดใหม่" } | Out-Null
+}
+
+# --------------------------------------------------------------------------
+# 2. Document Library: SHE_Patrol_Photos
+# --------------------------------------------------------------------------
+
+$libraryName = "SHE_Patrol_Photos"
+
+$library = Get-PnPList -Identity $libraryName -ErrorAction SilentlyContinue
+if (-not $library) {
+    Write-Host "Creating document library '$libraryName' ..." -ForegroundColor Cyan
+    $library = New-PnPList -Title $libraryName -Template DocumentLibrary -OnQuickLaunch
+} else {
+    Write-Host "Library '$libraryName' already exists — skipping creation." -ForegroundColor DarkGray
+}
+
+$libraryFields = @(
+    @{ Name = "FindingID";   Display = "FindingID";                              Type = "Text" }
+    @{ Name = "PhotoStage";  Display = "ขั้นตอนรูป (Photo Stage)"; Type = "Choice"; Choices = @("ก่อนแก้ไข","หลังแก้ไข") }
+)
+
+foreach ($f in $libraryFields) {
+    $existing = Get-PnPField -List $libraryName -Identity $f.Name -ErrorAction SilentlyContinue
+    if ($existing) {
+        Write-Host "  Field '$($f.Name)' already exists — skipping." -ForegroundColor DarkGray
+        continue
+    }
+    Write-Host "  Adding field '$($f.Name)' ($($f.Type)) ..." -ForegroundColor Cyan
+    switch ($f.Type) {
+        "Choice" {
+            Add-PnPField -List $libraryName -DisplayName $f.Display -InternalName $f.Name -Type Choice -Choices $f.Choices -AddToDefaultView | Out-Null
+        }
+        default {
+            Add-PnPField -List $libraryName -DisplayName $f.Display -InternalName $f.Name -Type $f.Type -AddToDefaultView | Out-Null
+        }
+    }
+}
+
+# --------------------------------------------------------------------------
+# 3. Permission groups
+# --------------------------------------------------------------------------
+
+$groupDefs = @(
+    @{ Name = "SHE-Auditor";            Role = "Contribute";  Description = "ผู้ตรวจ (SHE Committee / Safety Officer) — สร้าง finding ใหม่" }
+    @{ Name = "SHE-Dept-Responsible";   Role = "Contribute";  Description = "หน่วยงานที่ถูกตรวจพบ — อัปเดตมาตรการแก้ไขและรูปหลัง (จำกัดเฉพาะแผนกตน ดูหมายเหตุด้านล่าง)" }
+    @{ Name = "SHE-Safety-Admin";       Role = "Full Control"; Description = "เจ้าหน้าที่ความปลอดภัย — แก้ไข Grade, ตรวจสอบ, ปิดงาน, ดู dashboard รวม" }
+    @{ Name = "SHE-Executive-Viewer";   Role = "Read";         Description = "ผู้บริหาร — ดู dashboard/รายงานเท่านั้น" }
+)
+
+foreach ($g in $groupDefs) {
+    $group = Get-PnPGroup -Identity $g.Name -ErrorAction SilentlyContinue
+    if (-not $group) {
+        Write-Host "Creating group '$($g.Name)' ..." -ForegroundColor Cyan
+        $group = New-PnPGroup -Title $g.Name -Description $g.Description
+    } else {
+        Write-Host "Group '$($g.Name)' already exists — skipping creation." -ForegroundColor DarkGray
+    }
+
+    Write-Host "  Granting '$($g.Role)' on '$listName' to '$($g.Name)' ..." -ForegroundColor Cyan
+    Set-PnPListPermission -Identity $listName -Group $g.Name -AddRole $g.Role | Out-Null
+
+    Write-Host "  Granting '$($g.Role)' on '$libraryName' to '$($g.Name)' ..." -ForegroundColor Cyan
+    Set-PnPListPermission -Identity $libraryName -Group $g.Name -AddRole $g.Role | Out-Null
+}
+
+Write-Host ""
+Write-Host "=== Provisioning complete ===" -ForegroundColor Green
+Write-Host "Site: $SiteUrl"
+Write-Host "List: $listName (16 columns)"
+Write-Host "Library: $libraryName (FindingID, PhotoStage)"
+Write-Host "Groups: $($groupDefs.Name -join ', ')"
+Write-Host ""
+Write-Host "หมายเหตุสำคัญ (SHE-Dept-Responsible scoping):" -ForegroundColor Yellow
+Write-Host "  กลุ่ม SHE-Dept-Responsible ได้รับสิทธิ์ Contribute บนทั้ง List/Library ตามที่สเปกกำหนด" -ForegroundColor Yellow
+Write-Host "  แต่ SharePoint permission group ไม่รองรับการจำกัด 'เฉพาะแผนกตน' แบบ native ในระดับ item" -ForegroundColor Yellow
+Write-Host "  หากต้องการจำกัดจริง แนะนำ 2 แนวทาง:" -ForegroundColor Yellow
+Write-Host "    1) แยกกลุ่มย่อยตาม Shop (เช่น SHE-Dept-PDI, SHE-Dept-Acc, ...) แล้วตั้ง unique permission ต่อ item" -ForegroundColor Yellow
+Write-Host "       ผ่าน Power Automate action 'Grant access to an item or a folder' (standard connector) ตอนสร้าง finding" -ForegroundColor Yellow
+Write-Host "    2) หรือคุมด้วย view/UI ฝั่ง front-end เท่านั้น (ตามที่ front-end ปัจจุบันทำอยู่) และยอมรับว่าเป็นการควบคุมระดับ UI ไม่ใช่ระดับสิทธิ์ SharePoint" -ForegroundColor Yellow
+
+Disconnect-PnPOnline

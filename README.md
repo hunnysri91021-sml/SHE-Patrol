@@ -59,8 +59,26 @@
 3. **SHE-Safety-Admin** (Full Control) — แก้ไข Grade, ปิดงาน, ดู dashboard รวม
 4. **SHE-Executive-Viewer** (Read only) — ดู dashboard/รายงานเท่านั้น
 
+## Provisioning script
+
+`Create-SHEPatrolList.ps1` — PnP PowerShell script (idempotent) ที่สร้าง List/Library/Groups ทั้งหมด
+ข้างต้นให้อัตโนมัติ รันด้วย:
+
+```powershell
+Install-Module -Name PnP.PowerShell -Scope CurrentUser   # ครั้งแรกเท่านั้น
+./Create-SHEPatrolList.ps1 -SiteUrl "https://siammotors.sharepoint.com/sites/SHEPatrol"
+```
+
+สคริปต์จะพิมพ์หมายเหตุท้ายรันเกี่ยวกับข้อจำกัดของ SharePoint permission group ในการจำกัด
+"เฉพาะแผนกตน" ของกลุ่ม SHE-Dept-Responsible พร้อมแนวทางแก้ (ดูรายละเอียดในตัวสคริปต์)
+
+## Power Automate
+
+ดูโฟลเดอร์ `power-automate/` — สเปกสร้าง flow ทั้ง 4 ตัวแบบทีละขั้นตอน (ใช้ standard connector
+ล้วน ไม่มี premium) พร้อม JSON โครงสร้างอ้างอิงสำหรับ copy expression
+
 ## ที่ยังไม่ได้ทำในรอบนี้
 
-- `Create-SHEPatrolList.ps1` (PnP provisioning script สร้าง List/Library/Groups จริง) — จะทำต่อในรอบถัดไป
-- Power Automate flow ทั้ง 4 ตัว (JSON template สำหรับ import) — จะทำต่อในรอบถัดไป
 - การรันจริงกับ SharePoint tenant ของ SML — ต้องรันจากเครื่องที่เข้าถึง tenant ได้ (ทำไม่ได้จาก sandbox ของ Claude Code)
+- การสร้าง flow จริงใน Power Automate (มีแต่สเปก — ต้องสร้างเองในทีมที่มีสิทธิ์เข้า Power Automate ของ SML)
+- Item-level permission scoping สำหรับ SHE-Dept-Responsible ตามแผนก (ดูหมายเหตุใน `Create-SHEPatrolList.ps1`)
