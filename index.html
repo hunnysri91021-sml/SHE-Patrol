@@ -528,11 +528,33 @@
 </div>
 
 <script>
-const SP_CONFIG = {
-  SITE_URL: "https://siammotor.sharepoint.com/sites/Chosiya_Server",
-  LIST_NAME: "SHE_Patrol_Findings",
-  LIBRARY_NAME: "SHE_Patrol_Photos",
+const APP_CONFIG = {
+  // TODO: วาง URL ของ Power Automate Flow 5 (API Gateway, HTTP trigger) ที่นี่หลังสร้างแล้ว
+  // ดู power-automate/Flow5-API-Gateway.md — ต้องมีค่านี้ระบบถึงจะทำงานแบบ Live (ใช้งานได้ทั้งคนมี/ไม่มี M365)
+  API_URL: "",
 };
+const LIVE = !!APP_CONFIG.API_URL;
+
+async function apiCall(action, payload = {}) {
+  const res = await fetch(APP_CONFIG.API_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action, ...payload }),
+  });
+  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
+  const json = await res.json();
+  if (!json.ok) throw new Error(json.error || "เกิดข้อผิดพลาดจาก API");
+  return json.data;
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",")[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 const SLA_DAYS = { "A": 7, "B": 14, "C": 30, "Others": 30 };
 const SLA_ESCALATE = {
@@ -546,13 +568,6 @@ const GRADE_OPTIONS = ["A", "B", "C", "Others"];
 const CATEGORY_OPTIONS = ["F", "S", "EES", "5S"];
 const STATUS_OPTIONS = ["เปิดใหม่", "รอดำเนินการ", "ดำเนินการแล้ว", "รอตรวจสอบ", "ปิดงาน"];
 const STATUS_OPEN = ["เปิดใหม่", "รอดำเนินการ", "ดำเนินการแล้ว", "รอตรวจสอบ"];
-
-const ROLE_GROUPS = {
-  "SHE-Auditor": "auditor",
-  "SHE-Dept-Responsible": "dept",
-  "SHE-Safety-Admin": "admin",
-  "SHE-Executive-Viewer": "exec",
-};
 
 function pad(n, len) { return String(n).padStart(len, "0"); }
 
@@ -584,23 +599,7 @@ function findingCode(item) {
   return `SHE-${ym}-${pad(item.Id, 3)}`;
 }
 
-/* ---------------------------------------------------------------------- */
-/* Mode detection                                                          */
-/* ---------------------------------------------------------------------- */
-
-function isLiveMode() {
-  try {
-    const cfgHost = new URL(SP_CONFIG.SITE_URL).hostname;
-    return location.hostname === cfgHost;
-  } catch (e) {
-    return false;
-  }
-}
-
 const SheAPI = (function () {
-  const LIVE = isLiveMode();
-  let digestCache = null;
-
   /* ---- Demo (localStorage) backend -------------------------------- */
 
   const DEMO_KEY = "she_patrol_demo_findings";
@@ -777,152 +776,44 @@ const SheAPI = (function () {
     });
   }
 
-  /* ---- Live SharePoint REST backend -------------------------------- */
+  /* ---- Live backend (via Power Automate API Gateway — Flow 5) ------ */
 
-  function listUrl() {
-    return `${SP_CONFIG.SITE_URL}/_api/web/lists/getbytitle('${SP_CONFIG.LIST_NAME}')`;
-  }
-
-  async function getDigest() {
-    if (digestCache) return digestCache;
-    const res = await fetch(`${SP_CONFIG.SITE_URL}/_api/contextinfo`, {
-      method: "POST",
-      headers: { "Accept": "application/json;odata=verbose" },
-      credentials: "same-origin",
-    });
-    const data = await res.json();
-    digestCache = data.d.GetContextWebInformation.FormDigestValue;
-    return digestCache;
-  }
-
-  async function spFetch(url, opts = {}) {
-    const headers = Object.assign({ "Accept": "application/json;odata=verbose" }, opts.headers || {});
-    const res = await fetch(url, { credentials: "same-origin", ...opts, headers });
-    if (!res.ok) {
-      let msg = res.statusText;
-      try { const j = await res.json(); msg = j.error?.message?.value || msg; } catch (e) {}
-      throw new Error(`SharePoint REST ${res.status}: ${msg}`);
-    }
-    if (res.status === 204) return null;
-    return res.json();
-  }
-
-  async function liveList(filterQuery) {
-    const url = `${listUrl()}/items?$top=500&$orderby=PatrolDate desc` + (filterQuery ? `&${filterQuery}` : "");
-    const data = await spFetch(url);
-    return data.d.results;
-  }
-
-  async function liveGet(id) {
-    const data = await spFetch(`${listUrl()}/items(${id})`);
-    return data.d;
-  }
-
-  async function liveCreate(fields) {
-    const digest = await getDigest();
-    const data = await spFetch(`${listUrl()}/items`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json;odata=verbose", "X-RequestDigest": digest },
-      body: JSON.stringify({ __metadata: { type: await listItemType() }, ...fields }),
-    });
-    return data.d;
-  }
-
-  async function liveUpdate(id, fields) {
-    const digest = await getDigest();
-    await spFetch(`${listUrl()}/items(${id})`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json;odata=verbose",
-        "X-RequestDigest": digest,
-        "X-HTTP-Method": "MERGE",
-        "IF-MATCH": "*",
-      },
-      body: JSON.stringify({ __metadata: { type: await listItemType() }, ...fields }),
-    });
-    return liveGet(id);
-  }
-
-  let _itemTypeCache = null;
-  async function listItemType() {
-    if (_itemTypeCache) return _itemTypeCache;
-    const data = await spFetch(`${listUrl()}?$select=ListItemEntityTypeFullName`);
-    _itemTypeCache = data.d.ListItemEntityTypeFullName;
-    return _itemTypeCache;
-  }
-
-  async function ensureUser(loginNameOrEmail) {
-    const digest = await getDigest();
-    const data = await spFetch(`${SP_CONFIG.SITE_URL}/_api/web/ensureuser`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json;odata=verbose", "X-RequestDigest": digest },
-      body: JSON.stringify({ logonName: loginNameOrEmail }),
-    });
-    return data.d; // { Id, LoginName, Title, Email }
-  }
-
+  async function liveList() { return apiCall("listFindings"); }
+  async function liveGet(id) { return apiCall("getFinding", { id: Number(id) }); }
+  async function liveCreate(fields) { return apiCall("createFinding", { fields }); }
+  async function liveUpdate(id, fields) { return apiCall("updateFinding", { id: Number(id), fields }); }
   async function liveUploadPhoto(file, findingId, stage) {
-    const digest = await getDigest();
-    const fileName = `${findingId}_${stage === "ก่อนแก้ไข" ? "before" : "after"}.jpg`;
-    const folderUrl = `${SP_CONFIG.SITE_URL}/_api/web/lists/getbytitle('${SP_CONFIG.LIBRARY_NAME}')/RootFolder`;
-    const folderData = await spFetch(`${folderUrl}?$select=ServerRelativeUrl`);
-    const serverRelUrl = folderData.d.ServerRelativeUrl;
-    const buf = await file.arrayBuffer();
-    const uploadUrl = `${SP_CONFIG.SITE_URL}/_api/web/GetFolderByServerRelativeUrl('${encodeURIComponent(serverRelUrl)}')/Files/add(url='${encodeURIComponent(fileName)}',overwrite=true)`;
-    const uploaded = await spFetch(uploadUrl, {
-      method: "POST",
-      headers: { "X-RequestDigest": digest },
-      body: buf,
-    });
-    const fileServerRelUrl = uploaded.d.ServerRelativeUrl;
-    // set FindingID + PhotoStage metadata on the library item
-    const itemData = await spFetch(`${SP_CONFIG.SITE_URL}/_api/web/GetFileByServerRelativeUrl('${encodeURIComponent(fileServerRelUrl)}')/ListItemAllFields`);
-    const itemType = itemData.d.__metadata.type;
-    await spFetch(`${SP_CONFIG.SITE_URL}/_api/web/GetFileByServerRelativeUrl('${encodeURIComponent(fileServerRelUrl)}')/ListItemAllFields`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json;odata=verbose", "X-RequestDigest": digest, "X-HTTP-Method": "MERGE", "IF-MATCH": "*" },
-      body: JSON.stringify({ __metadata: { type: itemType }, FindingID: String(findingId), PhotoStage: stage }),
-    });
-    return `${SP_CONFIG.SITE_URL}${fileServerRelUrl}`;
+    const contentBase64 = await fileToBase64(file);
+    const data = await apiCall("uploadPhoto", { findingId: Number(findingId), stage, fileName: file.name, contentBase64 });
+    return data.fileUrl;
   }
-
-  async function liveCurrentUser() {
-    const data = await spFetch(`${SP_CONFIG.SITE_URL}/_api/web/currentuser`);
-    return data.d;
-  }
-
-  async function liveCurrentUserRole() {
-    try {
-      const data = await spFetch(`${SP_CONFIG.SITE_URL}/_api/web/currentuser/groups`);
-      const titles = data.d.results.map(g => g.Title);
-      for (const [group, role] of Object.entries(ROLE_GROUPS)) {
-        if (titles.some(t => t.includes(group))) return role;
-      }
-    } catch (e) { /* fall through */ }
-    return "viewer";
+  async function liveResolvePhotoUrl(url) {
+    const data = await apiCall("getPhoto", { fileUrl: url });
+    return `data:${data.contentType};base64,${data.contentBase64}`;
   }
 
   /* ---- public interface --------------------------------------------- */
 
   return {
     LIVE,
-    async list(filterQuery) { return LIVE ? liveList(filterQuery) : demoList(); },
+    async list() { return LIVE ? liveList() : demoList(); },
     async get(id) { return LIVE ? liveGet(id) : demoGet(id); },
     async create(fields) { return LIVE ? liveCreate(fields) : demoCreate(fields); },
     async update(id, fields) { return LIVE ? liveUpdate(id, fields) : demoUpdate(id, fields); },
     async uploadPhoto(file, findingId, stage) { return LIVE ? liveUploadPhoto(file, findingId, stage) : demoUploadPhoto(file, findingId, stage); },
-    async ensureUser(login) { return LIVE ? ensureUser(login) : { Id: 0, Title: login, LoginName: login }; },
-    async currentUserRole() { return LIVE ? liveCurrentUserRole() : (localStorage.getItem("she_demo_role") || "admin"); },
-    setDemoRole(role) { localStorage.setItem("she_demo_role", role); },
+    async resolvePhotoUrl(url) {
+      if (!url) return "";
+      if (!LIVE || url.startsWith("data:")) return url;
+      return liveResolvePhotoUrl(url);
+    },
   };
-})();
+})()
 
 
 /* ======================================================================
  * SHE_Patrol_Users — parallel demo/live data layer (mirrors SheAPI above)
  * ====================================================================== */
 const SheUsersAPI = (function () {
-  const LIVE = isLiveMode();
   const DEMO_KEY = "she_patrol_demo_users";
   const DEMO_SEED_VERSION = "2026-08-users-v1";
 
@@ -962,53 +853,9 @@ const SheUsersAPI = (function () {
     return rows[idx];
   }
 
-  function listUrl() { return `${SP_CONFIG.SITE_URL}/_api/web/lists/getbytitle('SHE_Patrol_Users')`; }
-  async function getDigest() {
-    const res = await fetch(`${SP_CONFIG.SITE_URL}/_api/contextinfo`, { method: "POST", headers: { Accept: "application/json;odata=verbose" }, credentials: "same-origin" });
-    const data = await res.json();
-    return data.d.GetContextWebInformation.FormDigestValue;
-  }
-  async function spFetch(url, opts = {}) {
-    const headers = Object.assign({ Accept: "application/json;odata=verbose" }, opts.headers || {});
-    const res = await fetch(url, { credentials: "same-origin", ...opts, headers });
-    if (!res.ok) {
-      let msg = res.statusText;
-      try { const j = await res.json(); msg = j.error?.message?.value || msg; } catch (e) {}
-      throw new Error(`SharePoint REST ${res.status}: ${msg}`);
-    }
-    if (res.status === 204) return null;
-    return res.json();
-  }
-  let _itemType = null;
-  async function listItemType() {
-    if (_itemType) return _itemType;
-    const data = await spFetch(`${listUrl()}?$select=ListItemEntityTypeFullName`);
-    _itemType = data.d.ListItemEntityTypeFullName;
-    return _itemType;
-  }
-  async function liveList() {
-    const data = await spFetch(`${listUrl()}/items?$top=500`);
-    return data.d.results;
-  }
-  async function liveCreate(fields) {
-    const digest = await getDigest();
-    const data = await spFetch(`${listUrl()}/items`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json;odata=verbose", "X-RequestDigest": digest },
-      body: JSON.stringify({ __metadata: { type: await listItemType() }, ...fields }),
-    });
-    return data.d;
-  }
-  async function liveUpdate(id, fields) {
-    const digest = await getDigest();
-    await spFetch(`${listUrl()}/items(${id})`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json;odata=verbose", "X-RequestDigest": digest, "X-HTTP-Method": "MERGE", "IF-MATCH": "*" },
-      body: JSON.stringify({ __metadata: { type: await listItemType() }, ...fields }),
-    });
-    const data = await spFetch(`${listUrl()}/items(${id})`);
-    return data.d;
-  }
+  async function liveList() { return apiCall("listUsers"); }
+  async function liveCreate(fields) { return apiCall("createUser", { fields }); }
+  async function liveUpdate(id, fields) { return apiCall("updateUser", { id: Number(id), fields }); }
 
   return {
     LIVE,
@@ -1224,6 +1071,11 @@ async function openDetail(id) {
   const foot = document.getElementById("detailFoot");
   const editable = canEditProgress(f);
   const overdue = isOverdueRow(f);
+  body.innerHTML = `<div class="loading">กำลังโหลดรูปภาพ...</div>`;
+  const [beforeSrc, afterSrc] = await Promise.all([
+    SheAPI.resolvePhotoUrl(f.PhotoBeforeUrl),
+    SheAPI.resolvePhotoUrl(f.PhotoAfterUrl),
+  ]);
 
   body.innerHTML = `
     <div class="detail-row"><div class="k">รหัส Finding</div><div class="v">${findingCode(f)}</div></div>
@@ -1234,7 +1086,7 @@ async function openDetail(id) {
     <div class="detail-row"><div class="k">กำหนดปิดงาน</div><div class="v">${fmtDate(f.DueDate)} ${overdue ? '<span class="overdue-tag">เลยกำหนด</span>' : ""}</div></div>
     <div class="detail-row"><div class="k">สถานะ</div><div class="v"><span class="badge st-${f.Status}">${f.Status}</span></div></div>
     <div class="detail-row"><div class="k">รูปสภาพที่พบ</div><div class="v">
-      ${f.PhotoBeforeUrl ? `<img src="${f.PhotoBeforeUrl}" style="max-width:100%;max-height:200px;border-radius:6px;">` : '<span style="color:var(--muted)">ไม่มีรูป</span>'}
+      ${beforeSrc ? `<img src="${beforeSrc}" style="max-width:100%;max-height:200px;border-radius:6px;">` : '<span style="color:var(--muted)">ไม่มีรูป</span>'}
     </div></div>
 
     <div class="section-title">การแก้ไข (หน่วยงานรับผิดชอบ)</div>
@@ -1245,7 +1097,7 @@ async function openDetail(id) {
       <div class="field full"><label>รูปหลังแก้ไข</label>
         <div class="photo-box">
           <input type="file" accept="image/*" capture="environment" id="d_photoAfter">
-          <img id="d_photoAfterPreview" src="${f.PhotoAfterUrl || ""}" style="${f.PhotoAfterUrl ? "display:block" : "display:none"}">
+          <img id="d_photoAfterPreview" src="${afterSrc || ""}" style="${afterSrc ? "display:block" : "display:none"}">
         </div>
       </div>
     ` : `
@@ -1253,7 +1105,7 @@ async function openDetail(id) {
       <div class="detail-row"><div class="k">ผู้รับผิดชอบ</div><div class="v">${escapeHtml(f.ActionResponsible) || "-"}</div></div>
       <div class="detail-row"><div class="k">มาตรการแก้ไข</div><div class="v">${escapeHtml(f.Countermeasure) || "-"}</div></div>
       <div class="detail-row"><div class="k">รูปหลังแก้ไข</div><div class="v">
-        ${f.PhotoAfterUrl ? `<img src="${f.PhotoAfterUrl}" style="max-width:100%;max-height:200px;border-radius:6px;">` : '<span style="color:var(--muted)">ไม่มีรูป</span>'}
+        ${afterSrc ? `<img src="${afterSrc}" style="max-width:100%;max-height:200px;border-radius:6px;">` : '<span style="color:var(--muted)">ไม่มีรูป</span>'}
       </div></div>
     `}
 

@@ -217,12 +217,16 @@ Write-Host "Library: $libraryName (FindingID, PhotoStage)"
 Write-Host "List: $usersListName (Name, Email, Role, Shop, Active)"
 Write-Host "Groups: $($groupDefs.Name -join ', ')"
 Write-Host ""
-Write-Host "หมายเหตุสำคัญ (SHE-Dept-Responsible scoping):" -ForegroundColor Yellow
+Write-Host "ขั้นตอนถัดไป:" -ForegroundColor Yellow
+Write-Host "  1) เพิ่ม Admin คนแรกใน '$usersListName' ด้วยตัวเอง (Name/Email/Role=SHE-Safety-Admin/Active=Yes)" -ForegroundColor Yellow
+Write-Host "     ผ่านหน้า SharePoint List โดยตรง — แอปยังไม่มีใคร login ได้จนกว่าจะมีแถวนี้" -ForegroundColor Yellow
+Write-Host "  2) สร้าง Power Automate Flow 5 (API Gateway) ตาม power-automate/Flow5-API-Gateway.md" -ForegroundColor Yellow
+Write-Host "     แล้วนำ URL ไปใส่ใน APP_CONFIG.API_URL ของ index.html — จำเป็นเพื่อให้ผู้ใช้ที่ไม่มี M365 ใช้งานได้" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "หมายเหตุ (SHE-Dept-Responsible scoping):" -ForegroundColor Yellow
 Write-Host "  กลุ่ม SHE-Dept-Responsible ได้รับสิทธิ์ Contribute บนทั้ง List/Library ตามที่สเปกกำหนด" -ForegroundColor Yellow
-Write-Host "  แต่ SharePoint permission group ไม่รองรับการจำกัด 'เฉพาะแผนกตน' แบบ native ในระดับ item" -ForegroundColor Yellow
-Write-Host "  หากต้องการจำกัดจริง แนะนำ 2 แนวทาง:" -ForegroundColor Yellow
-Write-Host "    1) แยกกลุ่มย่อยตาม Shop (เช่น SHE-Dept-PDI, SHE-Dept-Acc, ...) แล้วตั้ง unique permission ต่อ item" -ForegroundColor Yellow
-Write-Host "       ผ่าน Power Automate action 'Grant access to an item or a folder' (standard connector) ตอนสร้าง finding" -ForegroundColor Yellow
-Write-Host "    2) หรือคุมด้วย view/UI ฝั่ง front-end เท่านั้น (ตามที่ front-end ปัจจุบันทำอยู่) และยอมรับว่าเป็นการควบคุมระดับ UI ไม่ใช่ระดับสิทธิ์ SharePoint" -ForegroundColor Yellow
+Write-Host "  แต่ front-end เชื่อมผ่าน Flow 5 (Power Automate) ไม่ใช่ SharePoint ตรง จึงบังคับ 'เฉพาะแผนกตน'" -ForegroundColor Yellow
+Write-Host "  ที่ระดับ UI ผ่านคอลัมน์ Shop ใน '$usersListName' แทน — กลุ่ม SharePoint เหล่านี้ยังมีประโยชน์" -ForegroundColor Yellow
+Write-Host "  สำหรับคนที่เข้าดู/export List ตรงจาก SharePoint เอง" -ForegroundColor Yellow
 
 Disconnect-PnPOnline

@@ -9,11 +9,26 @@
 - **SharePoint List** `SHE_Patrol_Findings` — ฐานข้อมูลหลัก (16 คอลัมน์ ดูด้านล่าง)
 - **SharePoint List** `SHE_Patrol_Users` — รายชื่อผู้ใช้งาน + บทบาท (Admin เป็นผู้กำหนด)
 - **SharePoint Document Library** `SHE_Patrol_Photos` — เก็บรูปก่อน/หลังแก้ไข
-- **Power Automate** (standard connector เท่านั้น — ห้ามใช้ premium) — แจ้งเตือน/escalate ตาม SLA ทางอีเมล
-- **หน้าเว็บ front-end** — **ไฟล์เดียว** (`index.html`) แบบ single-page app เชื่อมต่อผ่าน SharePoint REST API
+- **Power Automate** (standard connector เท่านั้น — ห้ามใช้ premium) — 4 flow แจ้งเตือน/escalate ตาม SLA
+  ทางอีเมล + **Flow 5 = API Gateway** ที่ทำให้หน้าเว็บใช้งานได้แม้ผู้ใช้ไม่มีบัญชี Microsoft 365 (ดูด้านล่าง)
+- **หน้าเว็บ front-end** — **ไฟล์เดียว** (`index.html`) แบบ single-page app โฮสต์ที่ไหนก็ได้
+  (ไม่จำเป็นต้องอยู่ใน SharePoint site อีกต่อไป — ดูสถาปัตยกรรม API Gateway)
 - **Export Excel** — ยังคง export ให้ผู้บริหารดูได้ (แท็บ "รายงานผู้บริหาร" ในแอป)
 
 ห้ามใช้ Premium Connector ตลอดทั้งระบบ ตามข้อจำกัดของ SML
+
+## สำคัญ: ใช้งานได้ทั้งคนมี/ไม่มีบัญชี Microsoft 365
+
+พนักงาน SML ที่ไม่มี license M365 **ใช้งานได้ทุกอย่างเหมือนคนอื่น** (สร้าง finding, แก้ไขมาตรการ,
+ปิดงาน) เพราะ browser **ไม่เคยคุยกับ SharePoint ตรงๆ เลย** — คุยผ่าน **Power Automate Flow 5
+(API Gateway)** ซึ่งมี connection ของตัวเองไปยัง SharePoint เสมอ ไม่ว่าใครจะเป็นคนเรียกก็ตาม
+(ดู `power-automate/Flow5-API-Gateway.md` สำหรับรายละเอียดวิธีสร้าง)
+
+**ข้อแลกเปลี่ยนที่ต้องรู้**: เมื่อ browser ไม่ต้อง login SharePoint เอง สิทธิ์การเข้าถึงจึงย้ายจากระดับ
+SharePoint permission group (บังคับจริงโดย SharePoint) มาอยู่ที่ระดับแอป + `SHE_Patrol_Users`
+แทน — ใครก็ตามที่มี URL ของ Flow 5 เรียก API ตรงได้โดยไม่ผ่านหน้าเว็บ เป็นการยอมรับความเสี่ยงแบบ
+เดียวกับที่ระบบพี่น้อง (Work Permit) ใช้กับ endpoint สาธารณะสำหรับผู้รับเหมาภายนอกอยู่แล้ว — อ่านหัวข้อ
+"ข้อควรระวังด้านความปลอดภัย" ใน `Flow5-API-Gateway.md` ก่อน deploy จริง
 
 ## `index.html` — single-page app
 
@@ -32,6 +47,12 @@
 การปิดงาน **บังคับแนบรูปหลังแก้ไขก่อน** — ปุ่มปิดงานจะเปลี่ยนสถานะไม่ได้จนกว่าจะมีรูป และระบบบันทึก
 ชื่อผู้ปิดงาน + เวลาอัตโนมัติจากบัญชีที่ login อยู่ (ไม่ต้องพิมพ์ชื่อเอง — กันการสวมรอย)
 
+### เรื่องรูปภาพในโหมด Live
+
+รูปเก็บใน SharePoint Document Library ซึ่งปกติต้อง login SharePoint ถึงจะเปิดได้ — เพื่อให้คนไม่มี
+M365 ดูรูปได้ด้วย หน้าเว็บจะ**ไม่เปิดรูปตรงจาก SharePoint URL** แต่เรียก Flow 5 (action `getPhoto`)
+ให้ไปดึงไฟล์มาแปลงเป็น base64 ส่งกลับมาแทน — ทำงานอัตโนมัติตอนเปิดดูรายละเอียด finding ไม่ต้องตั้งค่าอะไรเพิ่ม
+
 ### เรื่องผู้ใช้งาน/สิทธิ์ (ตอบโจทย์ "กำหนดชื่อคนเข้าใช้งานได้ โดยมี Admin กำหนดบทบาทให้")
 
 - ผู้ใช้ **เลือกชื่อตัวเอง** จากรายชื่อ ไม่ได้เลือก Role เอง — Role/Shop มาจากสิ่งที่ Admin ตั้งไว้ในเมนู
@@ -40,40 +61,49 @@
 - **สำคัญ — bootstrap รอบแรก**: หลังรัน provisioning script ครั้งแรก List `SHE_Patrol_Users` จะว่างเปล่า
   ยังไม่มีใคร login ได้ ต้องเพิ่มแถวแรก (Admin คนแรก) ด้วยตัวเองผ่านหน้า SharePoint List โดยตรง
   (ใส่ Name/Email/Role=SHE-Safety-Admin/Active=Yes) หลังจากนั้น Admin คนนั้นเพิ่มคนอื่นต่อผ่านแอปได้เลย
-- ข้อจำกัดที่ต้องรู้: การ "login" นี้เป็นการระบุตัวตนระดับ UX เท่านั้น (ไม่ใช่รหัสผ่าน/SSO จริง) — สิทธิ์
-  แก้ไขข้อมูลจริงยังถูกบังคับอีกชั้นด้วย **SharePoint permission groups** (ดูด้านล่าง) ผ่าน REST API
-  เสมอ ต่อให้ front-end ถูก bypass สิทธิ์จริงก็ยังปลอดภัยอยู่ที่ SharePoint การอัปเกรดเป็น Microsoft 365
-  SSO (Azure AD / MSAL.js) เป็นขั้นถัดไปที่แนะนำ (ดูแนวทางเดียวกันในโปรเจกต์พี่น้อง `FireCheck`)
-- Dept-Responsible แต่ละคนผูกกับ **Shop เดียว** (ตั้งตอนเพิ่มผู้ใช้) — แก้ไข finding ได้เฉพาะ Shop
-  ของตัวเอง (บังคับที่ระดับ UI; ระดับ SharePoint ยังเป็น Contribute รวมตาม note ใน
-  `Create-SHEPatrolList.ps1`)
+- ข้อจำกัดที่ต้องรู้: การ "login" นี้เป็นการระบุตัวตนระดับ UX เท่านั้น (ไม่ใช่รหัสผ่าน/SSO จริง) —
+  ไม่มีอะไรกัน browser จากการปลอมชื่อ/role ถ้ามีคนแก้โค้ด client ฝั่งตัวเอง (ดูข้อควรระวังด้านบน)
+  การอัปเกรดเป็น Microsoft 365 SSO (Azure AD / MSAL.js) เป็นขั้นถัดไปที่แนะนำเมื่อพร้อม (ดูแนวทาง
+  เดียวกันในโปรเจกต์พี่น้อง `FireCheck`) ซึ่งจะทำให้กลับไปใช้ SharePoint permission group บังคับสิทธิ์
+  จริงได้อีกครั้ง — แต่จะตัดผู้ใช้ที่ไม่มี M365 ออกจากระบบไปด้วย จึงเป็น trade-off ที่ต้องเลือก
+- Dept-Responsible แต่ละคนผูกกับ **Shop เดียว** (ตั้งตอนเพิ่มผู้ใช้) — แก้ไข finding ได้เฉพาะ Shop ของตัวเอง
 
 ### เรื่องอีเมล (ตอบโจทย์ "ส่ง Mail ได้")
 
 หน้าเว็บ **ไม่มีปุ่มส่งอีเมล** เพราะ browser ส่งอีเมลเองไม่ได้และไม่ควรฝัง credential อีเมลไว้ใน
 client-side JS — การแจ้งเตือนทั้งหมด (finding ใหม่ / ส่งตรวจสอบ / เลยกำหนด SLA / ปิดงาน) ทำงาน
-อัตโนมัติฝั่ง **Power Automate** ทันทีที่มีการเปลี่ยนแปลงข้อมูลใน SharePoint List — ดูโฟลเดอร์
-`power-automate/` สำหรับสเปกสร้าง flow ทั้ง 4 ตัว
+อัตโนมัติฝั่ง **Power Automate (Flow 1-4)** ทันทีที่มีการเปลี่ยนแปลงข้อมูลใน SharePoint List — ดูโฟลเดอร์
+`power-automate/`
 
 ## Demo Mode vs Live Mode
 
-สคริปต์ใน `index.html` ตรวจจับอัตโนมัติว่าเปิดจากภายใน SharePoint site จริงหรือไม่ (`SP_CONFIG.SITE_URL`):
+`index.html` เช็ค `APP_CONFIG.API_URL`:
 
-- **ยังไม่ตั้งค่า / เปิดจากที่อื่น** → **Demo Mode**: ข้อมูลเก็บใน `localStorage` ของ browser
+- **ว่างเปล่า (ค่าเริ่มต้น)** → **Demo Mode**: ข้อมูลเก็บใน `localStorage` ของ browser
   — Findings 105 รายการ (5 รายการเป็นข้อมูลจริงจากรอบตรวจ 24 มิ.ย. 2026 ที่ส่งมา ที่เหลือสร้างขึ้นเพื่อสาธิต
   ครอบคลุม 5 เดือน ครบ 7 Shop) และผู้ใช้ตัวอย่าง 6 คน (โดเมนสมมติ `@example-sml.co.th` — ไม่ใช่พนักงานจริง)
   ครบทั้ง 4 บทบาทให้ login ทดสอบได้ทันที
-- **Live Mode**: หลังรัน `Create-SHEPatrolList.ps1` กับ site จริง + เพิ่ม Admin คนแรกใน
-  `SHE_Patrol_Users` ด้วยตัวเอง (ดูหัวข้อ bootstrap ด้านบน) แล้วแก้ `SP_CONFIG.SITE_URL` ใน
-  `index.html` ให้ตรงกับ site จริง จากนั้นอัปโหลดไฟล์เข้า site นั้น (Site Page หรือ Document Library)
-  — ระบบจะอ่าน/เขียนข้อมูลจริงผ่าน REST API ทันที
+- **ตั้งค่าแล้ว** → **Live Mode**: ทุก action (list/create/update/upload/getPhoto) เรียกผ่าน Flow 5
+  แทนการต่อ SharePoint ตรง
+
+### ขั้นตอนไป Live
+
+1. รัน `Create-SHEPatrolList.ps1` กับ site จริง (สร้าง List/Library/Groups)
+2. เพิ่ม Admin คนแรกใน `SHE_Patrol_Users` ด้วยตัวเอง (ดู bootstrap ด้านบน)
+3. สร้าง Power Automate Flow 5 ตาม `power-automate/Flow5-API-Gateway.md` แล้วคัดลอก HTTP URL ที่ได้
+4. แก้ `APP_CONFIG.API_URL` ใน `index.html` ให้เป็น URL นั้น
+5. อัปโหลด `index.html` ไปที่ไหนก็ได้ (SharePoint Site Page, Document Library, หรือแม้แต่ hosting
+   ภายนอกอย่าง GitHub Pages — ไม่ผูกกับ SharePoint site อีกต่อไปเพราะ Flow 5 เป็นตัวกลางให้แล้ว)
+6. สร้าง Flow 1-4 ตามสเปกใน `power-automate/` เพื่อเปิดใช้การแจ้งเตือนทางอีเมล
 
 ## SharePoint List: SHE_Patrol_Findings (16 คอลัมน์)
 
 `PatrolDate` (Date) · `Shop` (Choice: PDI/Acc/Yard/Washing/Touch up/Store/อื่นๆ) · `Place` (Text) ·
 `Description` (Note) · `Grade` (Choice: A/B/C/Others) · `Category` (Choice: F/S/EES/5S) ·
-`PhotoBeforeUrl` (URL) · `DueDate` (Date) · `RootCause` (Note) · `ActionResponsible` (Person) ·
-`Countermeasure` (Note) · `PhotoAfterUrl` (URL) · `Status` (Choice: เปิดใหม่/รอดำเนินการ/ดำเนินการแล้ว/รอตรวจสอบ/ปิดงาน) ·
+`PhotoBeforeUrl` (URL — เก็บ server-relative path จาก Flow 5 ไม่ใช่ URL เปิดตรงได้) · `DueDate` (Date) ·
+`RootCause` (Note) · `ActionResponsible` (Person) · `Countermeasure` (Note) ·
+`PhotoAfterUrl` (URL — เหมือน PhotoBeforeUrl) ·
+`Status` (Choice: เปิดใหม่/รอดำเนินการ/ดำเนินการแล้ว/รอตรวจสอบ/ปิดงาน) ·
 `VerifiedBy` (Person) · `Rules_Confirmed_DateTime` (DateTime)
 
 ## SharePoint List: SHE_Patrol_Users (5 คอลัมน์)
@@ -91,12 +121,15 @@ client-side JS — การแจ้งเตือนทั้งหมด (fi
 
 ฟอร์ม "บันทึกรายการตรวจใหม่" คำนวณ `DueDate` ให้อัตโนมัติจาก `PatrolDate + SLA วัน` ตาม Grade ที่เลือก
 
-## Permission Groups (บังคับโดย SharePoint ไม่ใช่หน้าเว็บ)
+## Permission Groups (SharePoint — ยังใช้สำหรับผู้ที่เข้าดู List ตรงๆ ผ่าน SharePoint UI/Excel export)
 
-1. **SHE-Auditor** (Contribute) — สร้าง finding ใหม่
-2. **SHE-Dept-Responsible** (Contribute) — อัปเดตมาตรการแก้ไข/รูปหลัง (จำกัดเฉพาะแผนกตนที่ระดับ UI ผ่าน `Shop` ใน `SHE_Patrol_Users`)
-3. **SHE-Safety-Admin** (Full Control) — แก้ไข Grade, ปิดงาน, ดู dashboard รวม, จัดการผู้ใช้งาน
-4. **SHE-Executive-Viewer** (Read only) — ดู dashboard/รายงานเท่านั้น
+1. **SHE-Auditor** (Contribute)
+2. **SHE-Dept-Responsible** (Contribute)
+3. **SHE-Safety-Admin** (Full Control)
+4. **SHE-Executive-Viewer** (Read only)
+
+หมายเหตุ: กลุ่มเหล่านี้**ไม่ใช่ตัวบังคับสิทธิ์ของหน้าเว็บอีกต่อไป** (ดูหัวข้อ API Gateway ด้านบน) —
+ยังมีประโยชน์สำหรับคนที่เข้าไปดู/export List ตรงจาก SharePoint เอง (ปกติคือ Admin/IT)
 
 ## Provisioning script
 
@@ -108,19 +141,24 @@ Install-Module -Name PnP.PowerShell -Scope CurrentUser   # ครั้งแร
 ./Create-SHEPatrolList.ps1 -SiteUrl "https://siammotor.sharepoint.com/sites/Chosiya_Server"
 ```
 
-สคริปต์จะพิมพ์หมายเหตุท้ายรันเกี่ยวกับข้อจำกัดของ SharePoint permission group ในการจำกัด
-"เฉพาะแผนกตน" ของกลุ่ม SHE-Dept-Responsible พร้อมแนวทางแก้ (ดูรายละเอียดในตัวสคริปต์) — ปัจจุบัน
-front-end จัดการเรื่องนี้แทนผ่าน `SHE_Patrol_Users.Shop`
-
 ## Power Automate
 
-ดูโฟลเดอร์ `power-automate/` — สเปกสร้าง flow ทั้ง 4 ตัวแบบทีละขั้นตอน (ใช้ standard connector
-ล้วน ไม่มี premium) พร้อม JSON โครงสร้างอ้างอิงสำหรับ copy expression — deep link ในอีเมลชี้ไปที่
-`index.html?id=<ItemID>` ซึ่งจะเปิดหน้ารายละเอียด finding นั้นให้อัตโนมัติ
+ดูโฟลเดอร์ `power-automate/` — 5 flow ทั้งหมด (ใช้ standard connector ล้วน ไม่มี premium):
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `Flow5-API-Gateway.md` | **สร้างก่อนอันอื่นทั้งหมด** — ทำให้หน้าเว็บอ่าน/เขียนข้อมูลได้โดยไม่ต้อง login SharePoint |
+| `Flow1-New-Finding-Notify-Dept.md` | แจ้งหัวหน้างาน/แผนกที่ถูกตรวจพบทันที |
+| `Flow2-Countermeasure-Notify-Verify.md` | แจ้ง Safety Officer มา verify เมื่อ Status เป็น "รอตรวจสอบ" |
+| `Flow3-Daily-SLA-Escalation.md` | เช็ค DueDate ใกล้/เลยกำหนดทุกวัน → escalate ตาม SLA |
+| `Flow4-Close-Verify-Stamp.md` | audit safety-net ตอนปิดงาน + แจ้งปิดงาน |
+
+deep link ในอีเมลของ Flow 1-4 ชี้ไปที่ `index.html?id=<ItemID>` ซึ่งจะเปิดหน้ารายละเอียด finding นั้นให้อัตโนมัติ
 
 ## ที่ยังไม่ได้ทำในรอบนี้
 
-- การรันจริงกับ SharePoint tenant ของ SML — ต้องรันจากเครื่องที่เข้าถึง tenant ได้ (ทำไม่ได้จาก sandbox ของ Claude Code)
-- การสร้าง flow จริงใน Power Automate (มีแต่สเปก — ต้องสร้างเองในทีมที่มีสิทธิ์เข้า Power Automate ของ SML)
+- การรันจริงกับ SharePoint tenant ของ SML และการสร้าง flow ทั้ง 5 ตัวจริงใน Power Automate — มีแต่สเปก
+  ต้องสร้างเองในทีมที่มีสิทธิ์เข้าถึง (ทำไม่ได้จาก sandbox ของ Claude Code)
 - Microsoft 365 SSO จริง (ปัจจุบัน login เป็นการเลือกชื่อจากรายชื่อที่ Admin ตั้งไว้ ไม่ใช่รหัสผ่าน/SSO)
-- Item-level permission scoping ระดับ SharePoint สำหรับ SHE-Dept-Responsible ตามแผนก (ตอนนี้บังคับที่ระดับ UI เท่านั้น ดูหมายเหตุใน `Create-SHEPatrolList.ps1`)
+- การป้องกัน Flow 5 เพิ่มเติม (SAS key / validation ฝั่ง flow) — ดูหัวข้อ "ข้อควรระวังด้านความปลอดภัย"
+  ใน `Flow5-API-Gateway.md`
