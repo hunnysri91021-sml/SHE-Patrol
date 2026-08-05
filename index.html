@@ -196,6 +196,12 @@
   .login-card .field{margin-bottom:14px;}
   .login-msg{font-size:12.5px;color:var(--accent);text-align:center;margin-top:8px;}
   .login-hint{font-size:11.5px;color:var(--muted);text-align:center;margin-top:14px;border-top:1px solid var(--border);padding-top:12px;}
+  .privacy-link{display:block;text-align:center;margin-top:10px;font-size:11.5px;color:var(--navy);cursor:pointer;text-decoration:none;}
+  .privacy-link:hover{text-decoration:underline;}
+  .pdpa-body h4{font-size:13px;color:var(--navy);margin:14px 0 6px;}
+  .pdpa-body h4:first-child{margin-top:0;}
+  .pdpa-body p, .pdpa-body li{font-size:13px;color:var(--text);line-height:1.6;}
+  .pdpa-body ul{margin:4px 0;padding-left:20px;}
 
   /* ---- App shell / nav ---- */
   .user-chip{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.12);padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);font-size:12.5px;}
@@ -271,6 +277,7 @@
       ไม่เห็นชื่อของคุณ? ให้ Safety Admin เพิ่มชื่อคุณที่เมนู "จัดการผู้ใช้งาน" ก่อน<br>
       (รายชื่อผู้ใช้ทั้งหมดบริหารจัดการโดย Admin เท่านั้น ไม่ใช่การสมัครสมาชิกด้วยตนเอง)
     </div>
+    <a class="privacy-link" id="privacyLinkLogin">🔒 นโยบายความเป็นส่วนตัว (PDPA)</a>
   </div>
 </div>
 
@@ -294,6 +301,7 @@
           <span>👤 <b id="userChipName"></b></span>
           <span class="role-tag" id="userChipRole"></span>
         </div>
+        <a class="logout-link" id="privacyLinkApp">🔒 ความเป็นส่วนตัว</a>
         <a class="logout-link" id="logoutBtn">ออกจากระบบ</a>
       </div>
     </div>
@@ -527,11 +535,42 @@
   </div>
 </div>
 
+<!-- ============== PDPA Privacy Notice Modal ============== -->
+<div class="modal-backdrop" id="pdpaModalBackdrop">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-head"><h3>🔒 นโยบายความเป็นส่วนตัว (PDPA)</h3><button class="modal-close" data-close="pdpaModalBackdrop">✕</button></div>
+    <div class="modal-body pdpa-body">
+      <h4>ข้อมูลที่เก็บในระบบนี้</h4>
+      <ul>
+        <li><b>ผู้ใช้งาน</b> — ชื่อ-นามสกุล, อีเมล, บทบาท, หน่วยงาน (แท็บ Users)</li>
+        <li><b>รายการตรวจ (Finding)</b> — วันที่/สถานที่ตรวจ, รายละเอียดที่พบ, ชื่อผู้รับผิดชอบแก้ไข,
+          ชื่อผู้ตรวจยืนยันปิดงาน, วันเวลาที่ปิดงาน, รูปถ่ายสภาพก่อน/หลังแก้ไข</li>
+      </ul>
+      <h4>วัตถุประสงค์และฐานทางกฎหมาย</h4>
+      <p>เก็บเพื่อการตรวจสอบและบันทึกความปลอดภัยในการทำงานตามหน้าที่ของบริษัท (SES/F-PES) —
+        ใช้ฐาน <b>"หน้าที่ตามกฎหมาย / ประโยชน์โดยชอบด้วยกฎหมายของนายจ้าง"</b> ในการดูแลความปลอดภัย
+        อาชีวอนามัยและสภาพแวดล้อมในการทำงาน ไม่ใช่ฐานความยินยอม (consent) เนื่องจากเป็นข้อมูลที่จำเป็น
+        ต่อการปฏิบัติหน้าที่ ไม่ใช่ทางเลือก</p>
+      <h4>สถานที่จัดเก็บข้อมูล</h4>
+      <p>ข้อมูลจัดเก็บใน Google Sheets/Drive (ไม่ใช่ SharePoint ของบริษัทเหมือนระบบอื่นในองค์กร) —
+        เข้าถึงได้เฉพาะผ่านหน้าเว็บนี้และบัญชี Google ที่เป็นเจ้าของสเปรดชีต ไม่ได้เปิดเป็นสาธารณะ
+        <b>สำคัญ: บัญชี Google ที่ใช้สร้างระบบนี้ควรเป็นบัญชีที่บริษัทควบคุมได้ ไม่ใช่บัญชีส่วนตัวของ
+        พนักงานคนใดคนหนึ่ง</b> เพื่อไม่ให้ข้อมูลของเพื่อนร่วมงานผูกอยู่กับบัญชีส่วนบุคคล</p>
+      <h4>รูปภาพ</h4>
+      <p>รูปถ่ายสภาพพื้นที่ที่ตรวจ — หลีกเลี่ยงการถ่ายให้ติดใบหน้าบุคคลโดยไม่จำเป็น</p>
+      <h4>สิทธิของเจ้าของข้อมูล</h4>
+      <p>ขอเข้าถึง แก้ไข หรือสอบถามเกี่ยวกับข้อมูลของท่านที่เก็บในระบบนี้ ติดต่อ Safety Admin
+        หรือเจ้าหน้าที่คุ้มครองข้อมูลส่วนบุคคล (DPO) ของบริษัท</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-primary" data-close="pdpaModalBackdrop">รับทราบ</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const APP_CONFIG = {
-  // TODO: วาง URL ของ Google Apps Script Web App ที่นี่หลัง deploy แล้ว (ลงท้ายด้วย /exec)
-  // ดู SHE-Patrol-AppsScript.gs — ต้องมีค่านี้ระบบถึงจะทำงานแบบ Live (ใช้งานได้ทั้งคนมี/ไม่มี M365 ฟรี)
-  API_URL: "",
+  API_URL: "https://script.google.com/macros/s/AKfycbw0lnxKYp0Qpit6osgq3A0iS8J_q98uRKlRqeINlzuYZ3fjsy4QOBz_Hh7rXNlJ1J3S/exec",
 };
 const LIVE = !!APP_CONFIG.API_URL;
 
@@ -1450,9 +1489,18 @@ document.getElementById("saveUserBtn").addEventListener("click", async () => {
  * ====================================================================== */
 let loginUsersCache = [];
 async function populateLoginSelect() {
-  loginUsersCache = await SheUsersAPI.list();
-  const active = loginUsersCache.filter(u => u.Active);
   const sel = document.getElementById("loginUserSelect");
+  sel.innerHTML = '<option value="">— กำลังโหลดรายชื่อ... —</option>';
+  document.getElementById("loginMsg").textContent = "";
+  try {
+    loginUsersCache = await SheUsersAPI.list();
+  } catch (err) {
+    sel.innerHTML = '<option value="">— โหลดรายชื่อไม่สำเร็จ —</option>';
+    document.getElementById("loginMsg").innerHTML = `เชื่อมต่อ API ไม่สำเร็จ: ${escapeHtml(err.message)}<br><a href="javascript:void(0)" id="retryLoginLoad">ลองใหม่</a>`;
+    document.getElementById("retryLoginLoad")?.addEventListener("click", populateLoginSelect);
+    return;
+  }
+  const active = loginUsersCache.filter(u => u.Active);
   if (!active.length) { sel.innerHTML = '<option value="">— ยังไม่มีผู้ใช้งาน ติดต่อ Safety Admin —</option>'; return; }
   sel.innerHTML = active.map(u => `<option value="${u.Id}">${escapeHtml(u.Name)} — ${ROLE_LABELS[roleShortCode(u.Role)]}</option>`).join("");
 }
@@ -1465,6 +1513,8 @@ document.getElementById("loginBtn").addEventListener("click", () => {
   showApp();
 });
 document.getElementById("logoutBtn").addEventListener("click", () => { clearCurrentUser(); location.reload(); });
+document.getElementById("privacyLinkLogin").addEventListener("click", () => openModal("pdpaModalBackdrop"));
+document.getElementById("privacyLinkApp").addEventListener("click", () => openModal("pdpaModalBackdrop"));
 
 function maybeOpenDeepLink() {
   const params = new URLSearchParams(location.search);
@@ -1484,9 +1534,13 @@ async function showApp() {
     ? "เชื่อมต่อ Google Sheets จริง — ข้อมูลนี้ share กับทุกคนที่ใช้ระบบ ไม่ว่าจะมีบัญชี Microsoft 365 หรือไม่"
     : "Demo Mode — ข้อมูลเก็บใน browser นี้เท่านั้น ยังไม่ share ข้ามเครื่อง จนกว่าจะเชื่อมต่อ Google Sheets จริง";
   if (currentRole() === "dept" && u.Shop) document.getElementById("filterShop").value = u.Shop;
-  await loadFindings();
-  renderList();
-  maybeOpenDeepLink();
+  try {
+    await loadFindings();
+    renderList();
+    maybeOpenDeepLink();
+  } catch (err) {
+    document.getElementById("listContainer").innerHTML = `<div class="empty">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(err.message)}<br><button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="location.reload()">ลองใหม่</button></div>`;
+  }
 }
 
 (async function initAuth() {
