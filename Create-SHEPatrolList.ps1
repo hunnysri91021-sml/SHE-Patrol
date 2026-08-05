@@ -16,13 +16,22 @@
 .PARAMETER SiteUrl
     Full URL of the target SharePoint site, e.g. https://siammotor.sharepoint.com/sites/Chosiya_Server
 
+.PARAMETER ClientId
+    Entra ID App (client) ID to authenticate with. Required if your tenant has disabled the
+    default multi-tenant "PnP Management Shell" app — register your own with:
+        Register-PnPEntraIDAppForInteractiveLogin -ApplicationName "SHE Patrol PnP"
+    then pass the AzureAppId/ClientId it prints here.
+
 .EXAMPLE
-    ./Create-SHEPatrolList.ps1 -SiteUrl "https://siammotor.sharepoint.com/sites/Chosiya_Server"
+    ./Create-SHEPatrolList.ps1 -SiteUrl "https://siammotor.sharepoint.com/sites/Chosiya_Server" -ClientId "27ebd1dc-a57c-40c3-9d8e-035dcbd23d08"
 #>
 
 param(
     [Parameter(Mandatory = $true)]
-    [string]$SiteUrl
+    [string]$SiteUrl,
+
+    [Parameter(Mandatory = $false)]
+    [string]$ClientId
 )
 
 $ErrorActionPreference = "Stop"
@@ -34,7 +43,11 @@ if (-not (Get-Module -ListAvailable -Name PnP.PowerShell)) {
 Import-Module PnP.PowerShell
 
 Write-Host "Connecting to $SiteUrl ..." -ForegroundColor Cyan
-Connect-PnPOnline -Url $SiteUrl -Interactive
+if ($ClientId) {
+    Connect-PnPOnline -Url $SiteUrl -Interactive -ClientId $ClientId
+} else {
+    Connect-PnPOnline -Url $SiteUrl -Interactive
+}
 
 # --------------------------------------------------------------------------
 # 1. List: SHE_Patrol_Findings
