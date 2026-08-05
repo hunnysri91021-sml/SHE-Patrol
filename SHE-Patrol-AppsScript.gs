@@ -30,6 +30,11 @@
  *   8. (ทำครั้งเดียว) ตั้ง time-driven trigger ให้ checkSlaEscalation() รันทุกวัน:
  *      Apps Script editor → รูปนาฬิกา (Triggers) → Add Trigger →
  *      Function: checkSlaEscalation, Event source: Time-driven, Day timer, 8-9am
+ *   9. (แนะนำ ถ้าบัญชี Google ที่ใช้เป็นบัญชีส่วนตัว ไม่ใช่ M365 tenant ของบริษัท) กรอก
+ *      MS365_Backup_Email ในแท็บ Settings เป็นอีเมล Outlook ของบริษัท แล้วตั้ง time-driven
+ *      trigger อีกตัว: Function: backupToMS365Email, Event source: Time-driven, Week timer
+ *      — จะได้ไฟล์สำรอง .xlsx ส่งเข้าอีเมล M365 ทุกสัปดาห์ ตั้ง Power Automate flow ตาม
+ *      power-automate/Flow6-Backup-To-OneDrive.md เพิ่มถ้าอยากให้เซฟเข้า OneDrive อัตโนมัติด้วย
  */
 
 const FINDINGS_SHEET_NAME = "Findings";
@@ -61,6 +66,7 @@ const DEFAULT_SETTINGS = [
   ["Shop_Email_Store", "", "อีเมลหัวหน้างาน Store"],
   ["Shop_Email_อื่นๆ", "", "อีเมลหัวหน้างาน อื่นๆ (ใช้เป็น fallback ด้วยถ้า Shop อื่นไม่ได้กรอกอีเมล)"],
   ["SLA_Escalation_Days_Before", "2", "แจ้งเตือนล่วงหน้ากี่วันก่อนถึงกำหนด (checkSlaEscalation รันทุกวัน)"],
+  ["MS365_Backup_Email", "", "อีเมล Microsoft 365 (Outlook) ที่จะรับไฟล์สำรองข้อมูล .xlsx รายสัปดาห์ — เว้นว่างถ้ายังไม่ต้องการสำรอง (ดู backupToMS365Email + power-automate/Flow6-Backup-To-OneDrive.md)"],
 ];
 
 // ---------------------------------------------------------------
@@ -103,6 +109,7 @@ function onOpen() {
     .createMenu("SHE Patrol")
     .addItem("ตั้งค่าชีต (Setup)", "setupSheet")
     .addItem("เช็ค SLA เลยกำหนด (ทดสอบ)", "checkSlaEscalation")
+    .addItem("สำรองข้อมูลเข้า MS365 ตอนนี้ (ทดสอบ)", "backupToMS365Email")
     .addToUi();
 }
 
@@ -409,5 +416,40 @@ function checkSlaEscalation() {
         link ? `เปิดหน้า Finding: ${link}` : "",
       ].join("\n"),
     });
+  });
+}
+
+// ---------------------------------------------------------------
+// สำรองข้อมูลเข้า Microsoft 365 — เพราะสเปรดชีตนี้ผูกกับบัญชี Google ส่วนตัว
+// ไม่ใช่ M365 tenant ของบริษัท จึงส่งสำเนา .xlsx ทั้งไฟล์เข้าอีเมล M365 เป็นระยะ
+// (ตั้ง time-driven trigger ให้ backupToMS365Email รันรายสัปดาห์ — ดู README)
+//
+// ฝั่ง Microsoft 365 ใช้ Power Automate flow มาตรฐาน (ไม่ใช่ premium — ต่างจาก Flow 5 เดิม)
+// คอยดักอีเมลนี้แล้วเซฟไฟล์แนบเข้า OneDrive/SharePoint ให้อัตโนมัติ ดู
+// power-automate/Flow6-Backup-To-OneDrive.md
+// ---------------------------------------------------------------
+function backupToMS365Email() {
+  const to = getSetting("MS365_Backup_Email");
+  if (!to) return; // ยังไม่ได้ตั้งค่า — ข้าม
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const exportUrl = `https://docs.google.com/spreadsheets/d/${ss.getId()}/export?format=xlsx`;
+  const token = ScriptApp.getOAuthToken();
+  const response = UrlFetchApp.fetch(exportUrl, { headers: { Authorization: "Bearer " + token } });
+  const dateStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd");
+  const blob = response.getBlob().setName(`SHE_Patrol_Backup_${dateStr}.xlsx`);
+
+  MailApp.sendEmail({
+    to: to,
+    subject: `[SHE Patrol] สำรองข้อมูลรายสัปดาห์ ${Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy")}`,
+    body: [
+      "ไฟล์แนบคือสำเนาข้อมูล SHE Patrol ทั้งหมด (Findings + Users) ณ เวลาที่ส่งอีเมลนี้",
+      "ส่งมาเพื่อสำรองข้อมูลไว้ใน Microsoft 365 เนื่องจากข้อมูลหลักอยู่ใน Google Sheets ที่ผูกกับ",
+      "บัญชี Google ส่วนบุคคล ไม่ใช่ M365 tenant ของบริษัท",
+      "",
+      "ถ้าตั้งค่า Power Automate flow ตาม power-automate/Flow6-Backup-To-OneDrive.md ไว้แล้ว",
+      "ไฟล์นี้จะถูกบันทึกเข้า OneDrive/SharePoint ให้อัตโนมัติ ไม่ต้องทำอะไรเพิ่ม",
+    ].join("\n"),
+    attachments: [blob],
   });
 }
