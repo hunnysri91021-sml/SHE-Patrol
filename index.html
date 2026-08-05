@@ -285,10 +285,16 @@
       <label>เลือกชื่อของคุณ</label>
       <select id="loginUserSelect"><option value="">— กำลังโหลดรายชื่อ... —</option></select>
     </div>
+    <div class="field">
+      <label>รหัสผ่าน</label>
+      <input type="password" id="loginPassword" placeholder="กรอกรหัสผ่านของคุณ">
+    </div>
     <button class="btn btn-primary" style="width:100%;justify-content:center;" id="loginBtn">เข้าสู่ระบบ</button>
     <div class="login-msg" id="loginMsg"></div>
+    <div class="login-msg" id="demoLoginHint" style="display:none;color:var(--yellow);"></div>
     <div class="login-hint">
       ไม่เห็นชื่อของคุณ? ให้ Safety Admin เพิ่มชื่อคุณที่เมนู "จัดการผู้ใช้งาน" ก่อน<br>
+      ลืมรหัสผ่าน? ให้ Safety Admin ตั้งรหัสผ่านใหม่ให้ที่เมนู "จัดการผู้ใช้งาน"<br>
       (รายชื่อผู้ใช้ทั้งหมดบริหารจัดการโดย Admin เท่านั้น ไม่ใช่การสมัครสมาชิกด้วยตนเอง)
     </div>
     <a class="privacy-link" id="privacyLinkLogin">🔒 นโยบายความเป็นส่วนตัว (PDPA)</a>
@@ -567,6 +573,10 @@
         </select>
       </div>
       <div class="field"><label><input type="checkbox" id="u_active" checked style="width:auto;"> ใช้งานอยู่ (ถอดออกจากรายชื่อ login ถ้าปิด)</label></div>
+      <div class="field">
+        <label>รหัสผ่าน <span id="u_passwordHint" style="font-weight:400;color:var(--muted);"></span></label>
+        <input type="password" id="u_password" placeholder="ตั้งรหัสผ่านสำหรับผู้ใช้งานนี้">
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" data-close="userModalBackdrop">ยกเลิก</button>
@@ -892,16 +902,17 @@ const SheAPI = (function () {
  * ====================================================================== */
 const SheUsersAPI = (function () {
   const DEMO_KEY = "she_patrol_demo_users";
-  const DEMO_SEED_VERSION = "2026-08-users-v1";
+  const DEMO_SEED_VERSION = "2026-08-users-v2-password";
+  const DEMO_DEFAULT_PASSWORD = "demo1234"; // ทุกบัญชี demo ใช้รหัสผ่านนี้ — ไม่ใช่ข้อมูลจริง
 
   function seedUsers() {
     const seeded = [
-      { Id: 1, Name: "จนท.ความปลอดภัย (Admin)", Email: "safety.admin@example-sml.co.th", Role: "SHE-Safety-Admin", Shop: "", Active: true },
-      { Id: 2, Name: "ผู้ตรวจ SHE Committee", Email: "auditor1@example-sml.co.th", Role: "SHE-Auditor", Shop: "", Active: true },
-      { Id: 3, Name: "หัวหน้างาน PDI", Email: "pdi.lead@example-sml.co.th", Role: "SHE-Dept-Responsible", Shop: "PDI", Active: true },
-      { Id: 4, Name: "หัวหน้างาน Acc", Email: "acc.lead@example-sml.co.th", Role: "SHE-Dept-Responsible", Shop: "Acc", Active: true },
-      { Id: 5, Name: "หัวหน้างาน Yard", Email: "yard.lead@example-sml.co.th", Role: "SHE-Dept-Responsible", Shop: "Yard", Active: true },
-      { Id: 6, Name: "ผู้บริหาร SML", Email: "exec.viewer@example-sml.co.th", Role: "SHE-Executive-Viewer", Shop: "", Active: true },
+      { Id: 1, Name: "จนท.ความปลอดภัย (Admin)", Email: "safety.admin@example-sml.co.th", Role: "SHE-Safety-Admin", Shop: "", Active: true, Password: DEMO_DEFAULT_PASSWORD },
+      { Id: 2, Name: "ผู้ตรวจ SHE Committee", Email: "auditor1@example-sml.co.th", Role: "SHE-Auditor", Shop: "", Active: true, Password: DEMO_DEFAULT_PASSWORD },
+      { Id: 3, Name: "หัวหน้างาน PDI", Email: "pdi.lead@example-sml.co.th", Role: "SHE-Dept-Responsible", Shop: "PDI", Active: true, Password: DEMO_DEFAULT_PASSWORD },
+      { Id: 4, Name: "หัวหน้างาน Acc", Email: "acc.lead@example-sml.co.th", Role: "SHE-Dept-Responsible", Shop: "Acc", Active: true, Password: DEMO_DEFAULT_PASSWORD },
+      { Id: 5, Name: "หัวหน้างาน Yard", Email: "yard.lead@example-sml.co.th", Role: "SHE-Dept-Responsible", Shop: "Yard", Active: true, Password: DEMO_DEFAULT_PASSWORD },
+      { Id: 6, Name: "ผู้บริหาร SML", Email: "exec.viewer@example-sml.co.th", Role: "SHE-Executive-Viewer", Shop: "", Active: true, Password: DEMO_DEFAULT_PASSWORD },
     ];
     localStorage.setItem(DEMO_KEY, JSON.stringify(seeded));
     localStorage.setItem(DEMO_KEY + "_version", DEMO_SEED_VERSION);
@@ -912,33 +923,46 @@ const SheUsersAPI = (function () {
     try { return JSON.parse(localStorage.getItem(DEMO_KEY)) || seedUsers(); } catch (e) { return seedUsers(); }
   }
   function demoWrite(rows) { localStorage.setItem(DEMO_KEY, JSON.stringify(rows)); }
-  async function demoList() { return demoRead(); }
+  function stripPassword(u) { const { Password, ...safe } = u; return safe; }
+  async function demoList() { return demoRead().map(stripPassword); }
   async function demoCreate(fields) {
     const rows = demoRead();
     const nextId = rows.reduce((m, r) => Math.max(m, r.Id), 0) + 1;
-    const row = { Id: nextId, Active: true, Shop: "", ...fields };
+    const row = { Id: nextId, Active: true, Shop: "", Password: "", ...fields };
     rows.push(row);
     demoWrite(rows);
-    return row;
+    return stripPassword(row);
   }
   async function demoUpdate(id, fields) {
     const rows = demoRead();
     const idx = rows.findIndex(r => r.Id === Number(id));
     if (idx === -1) throw new Error("ไม่พบผู้ใช้งาน");
-    rows[idx] = { ...rows[idx], ...fields };
+    const patch = { ...fields };
+    if (!patch.Password) delete patch.Password; // เว้นว่าง = ไม่เปลี่ยนรหัสผ่านเดิม
+    rows[idx] = { ...rows[idx], ...patch };
     demoWrite(rows);
-    return rows[idx];
+    return stripPassword(rows[idx]);
+  }
+  async function demoLogin(id, password) {
+    const u = demoRead().find(r => String(r.Id) === String(id));
+    if (!u) throw new Error("ไม่พบผู้ใช้งาน");
+    if (!u.Active) throw new Error("บัญชีนี้ถูกปิดใช้งาน ติดต่อ Safety Admin");
+    if (!u.Password) throw new Error("บัญชีนี้ยังไม่ได้ตั้งรหัสผ่าน ติดต่อ Safety Admin ให้ตั้งรหัสผ่านก่อน");
+    if (u.Password !== password) throw new Error("รหัสผ่านไม่ถูกต้อง");
+    return stripPassword(u);
   }
 
   async function liveList() { return apiCall("listUsers"); }
   async function liveCreate(fields) { return apiCall("createUser", { fields }); }
   async function liveUpdate(id, fields) { return apiCall("updateUser", { id: Number(id), fields }); }
+  async function liveLogin(id, password) { return apiCall("login", { id: Number(id), password }); }
 
   return {
     LIVE,
     async list() { return LIVE ? liveList() : demoList(); },
     async create(fields) { return LIVE ? liveCreate(fields) : demoCreate(fields); },
     async update(id, fields) { return LIVE ? liveUpdate(id, fields) : demoUpdate(id, fields); },
+    async login(id, password) { return LIVE ? liveLogin(id, password) : demoLogin(id, password); },
   };
 })();
 
@@ -1548,6 +1572,8 @@ function openUserModal(u) {
   document.getElementById("u_role").value = u ? u.Role : "SHE-Auditor";
   document.getElementById("u_shop").value = u ? u.Shop || "" : "";
   document.getElementById("u_active").checked = u ? !!u.Active : true;
+  document.getElementById("u_password").value = "";
+  document.getElementById("u_passwordHint").textContent = u ? "(เว้นว่าง = ไม่เปลี่ยนรหัสผ่านเดิม)" : "(จำเป็นต้องตั้งรหัสผ่านสำหรับผู้ใช้งานใหม่)";
   toggleShopField();
   openModal("userModalBackdrop");
 }
@@ -1558,11 +1584,14 @@ document.getElementById("saveUserBtn").addEventListener("click", async () => {
   const role = document.getElementById("u_role").value;
   const shop = role === "SHE-Dept-Responsible" ? document.getElementById("u_shop").value : "";
   const active = document.getElementById("u_active").checked;
+  const password = document.getElementById("u_password").value;
   if (!name || !email) { alert("กรุณากรอกชื่อและอีเมล"); return; }
+  if (!editingUserId && !password) { alert("กรุณาตั้งรหัสผ่านสำหรับผู้ใช้งานใหม่"); return; }
   const btn = document.getElementById("saveUserBtn");
   btn.disabled = true; btn.textContent = "กำลังบันทึก...";
   try {
     const fields = { Name: name, Email: email, Role: role, Shop: shop, Active: active };
+    if (password) fields.Password = password;
     if (editingUserId) await SheUsersAPI.update(editingUserId, fields);
     else await SheUsersAPI.create(fields);
     closeModal("userModalBackdrop");
@@ -1703,13 +1732,24 @@ async function populateLoginSelect() {
   if (!active.length) { sel.innerHTML = '<option value="">— ยังไม่มีผู้ใช้งาน ติดต่อ Safety Admin —</option>'; return; }
   sel.innerHTML = active.map(u => `<option value="${u.Id}">${escapeHtml(u.Name)} — ${ROLE_LABELS[roleShortCode(u.Role)]}</option>`).join("");
 }
-document.getElementById("loginBtn").addEventListener("click", () => {
+document.getElementById("loginBtn").addEventListener("click", async () => {
   const id = document.getElementById("loginUserSelect").value;
-  if (!id) { document.getElementById("loginMsg").textContent = "กรุณาเลือกชื่อของคุณ"; return; }
-  const u = loginUsersCache.find(x => String(x.Id) === String(id));
-  if (!u) return;
-  setCurrentUser(u);
-  showApp();
+  const password = document.getElementById("loginPassword").value;
+  const msgEl = document.getElementById("loginMsg");
+  if (!id) { msgEl.textContent = "กรุณาเลือกชื่อของคุณ"; return; }
+  if (!password) { msgEl.textContent = "กรุณาใส่รหัสผ่าน"; return; }
+  const btn = document.getElementById("loginBtn");
+  btn.disabled = true; btn.textContent = "กำลังตรวจสอบ...";
+  msgEl.textContent = "";
+  try {
+    const u = await SheUsersAPI.login(id, password);
+    setCurrentUser(u);
+    showApp();
+  } catch (err) {
+    msgEl.textContent = err.message;
+  } finally {
+    btn.disabled = false; btn.textContent = "เข้าสู่ระบบ";
+  }
 });
 document.getElementById("logoutBtn").addEventListener("click", () => { clearCurrentUser(); location.reload(); });
 document.getElementById("privacyLinkLogin").addEventListener("click", () => openModal("pdpaModalBackdrop"));
@@ -1747,6 +1787,11 @@ async function showApp() {
 }
 
 (async function initAuth() {
+  if (!LIVE) {
+    const hint = document.getElementById("demoLoginHint");
+    hint.style.display = "block";
+    hint.innerHTML = `⚠️ Demo Mode — ทุกบัญชีใช้รหัสผ่าน <code>demo1234</code>`;
+  }
   await populateLoginSelect();
   const existing = getCurrentUser();
   if (existing) await showApp();

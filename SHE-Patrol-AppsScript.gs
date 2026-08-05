@@ -35,6 +35,11 @@
  *      trigger อีกตัว: Function: backupToMS365Email, Event source: Time-driven, Week timer
  *      — จะได้ไฟล์สำรอง .xlsx ส่งเข้าอีเมล M365 ทุกสัปดาห์ ตั้ง Power Automate flow ตาม
  *      power-automate/Flow6-Backup-To-OneDrive.md เพิ่มถ้าอยากให้เซฟเข้า OneDrive อัตโนมัติด้วย
+ *   10. ล็อกอินตอนนี้ต้องใส่รหัสผ่านด้วย (เก็บเป็น SHA-256 hash ในคอลัมน์ Password ของชีต Users
+ *      ไม่ใช่ plaintext) — Admin คนแรกที่เพิ่มในข้อ 5 ยังไม่มีรหัสผ่าน เข้าแอปไม่ได้จนกว่าจะตั้งรหัส
+ *      ผ่านให้ตัวเองก่อน ใช้เมนู "SHE Patrol" → "ตั้งรหัสผ่านเริ่มต้นให้ผู้ใช้งาน (bootstrap)" ใน
+ *      Google Sheet เพื่อตั้งรหัสผ่านแรกโดยไม่ต้องล็อกอินเข้าแอปก่อน — หลังจากนั้น Admin จัดการ
+ *      รหัสผ่านของคนอื่นต่อได้ผ่านเมนู "จัดการผู้ใช้งาน" ในแอปตามปกติ
  */
 
 const FINDINGS_SHEET_NAME = "Findings";
@@ -47,7 +52,7 @@ const FINDINGS_HEADERS = [
   "PhotoBeforeUrl", "DueDate", "RootCause", "ActionResponsible", "Countermeasure",
   "PhotoAfterUrl", "Status", "VerifiedBy", "Rules_Confirmed_DateTime",
 ];
-const USERS_HEADERS = ["Id", "Name", "Email", "Role", "Shop", "Active"];
+const USERS_HEADERS = ["Id", "Name", "Email", "Role", "Shop", "Active", "Password"];
 
 const SLA_DAYS = { A: 7, B: 14, C: 30, Others: 30 };
 const STATUS_OPEN = ["เปิดใหม่", "รอดำเนินการ", "ดำเนินการแล้ว", "รอตรวจสอบ"];
@@ -116,9 +121,36 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("SHE Patrol")
     .addItem("ตั้งค่าชีต (Setup)", "setupSheet")
+    .addItem("ตั้งรหัสผ่านเริ่มต้นให้ผู้ใช้งาน (bootstrap)", "setInitialAdminPassword")
     .addItem("เช็ค SLA เลยกำหนด (ทดสอบ)", "checkSlaEscalation")
     .addItem("สำรองข้อมูลเข้า MS365 ตอนนี้ (ทดสอบ)", "backupToMS365Email")
     .addToUi();
+}
+
+// ---------------------------------------------------------------
+// ใช้ตอน bootstrap ครั้งแรก (หรือกู้บัญชี Admin ที่ล็อกอินไม่ได้) — ตั้งรหัสผ่านให้ผู้ใช้งาน
+// คนใดคนหนึ่งได้โดยไม่ต้องล็อกอินเข้าแอปก่อน เพราะรันจากเมนูใน Google Sheet โดยตรง
+// ---------------------------------------------------------------
+function setInitialAdminPassword() {
+  const ui = SpreadsheetApp.getUi();
+  const emailResp = ui.prompt("ตั้งรหัสผ่านผู้ใช้งาน", "อีเมลของผู้ใช้งานที่จะตั้งรหัสผ่าน (ต้องมีอยู่ในแท็บ Users แล้ว):", ui.ButtonSet.OK_CANCEL);
+  if (emailResp.getSelectedButton() !== ui.Button.OK) return;
+  const email = emailResp.getResponseText().trim();
+
+  const pwResp = ui.prompt("ตั้งรหัสผ่านผู้ใช้งาน", "รหัสผ่านใหม่สำหรับ " + email + ":", ui.ButtonSet.OK_CANCEL);
+  if (pwResp.getSelectedButton() !== ui.Button.OK) return;
+  const password = pwResp.getResponseText();
+  if (!password) { ui.alert("กรุณาใส่รหัสผ่าน — ยกเลิกการตั้งค่า"); return; }
+
+  const rows = readAllRows_(USERS_SHEET_NAME, USERS_HEADERS);
+  const row = rows.find(r => String(r.Email).toLowerCase() === email.toLowerCase());
+  if (!row) { ui.alert("ไม่พบอีเมลนี้ในแท็บ Users — เพิ่มผู้ใช้งานคนนี้ก่อน"); return; }
+
+  const sheet = getSheet_(USERS_SHEET_NAME);
+  const rowNum = findRowNumberById_(USERS_SHEET_NAME, USERS_HEADERS, row.Id);
+  const pwCol = USERS_HEADERS.indexOf("Password") + 1;
+  sheet.getRange(rowNum, pwCol).setValue(hashPassword_(password));
+  ui.alert("ตั้งรหัสผ่านให้ " + row.Name + " เรียบร้อยแล้ว — ล็อกอินเข้าแอปด้วยรหัสผ่านนี้ได้เลย");
 }
 
 function getSetting(key) {
@@ -198,6 +230,7 @@ function doPost(e) {
       case "listUsers": return jsonResponse({ ok: true, data: listUsers_() });
       case "createUser": return jsonResponse({ ok: true, data: createUser_(data.fields || {}) });
       case "updateUser": return jsonResponse({ ok: true, data: updateUser_(data.id, data.fields || {}) });
+      case "login": return jsonResponse({ ok: true, data: login_(data.id, data.password) });
       case "uploadPhoto": return jsonResponse({ ok: true, data: uploadPhoto_(data.findingId, data.stage, data.fileName, data.contentBase64) });
       case "listSettings": return jsonResponse({ ok: true, data: listSettings_() });
       case "updateSettings": return jsonResponse({ ok: true, data: updateSettings_(data.values || {}) });
@@ -307,10 +340,31 @@ function updateFinding_(id, fields) {
 }
 
 // ---------------------------------------------------------------
-// Users CRUD
+// Users CRUD — Password เก็บเป็น SHA-256 hash เท่านั้น ไม่ใช่ plaintext และ
+// ไม่ส่งกลับไปให้ client เด็ดขาด (sanitizeUser_ ตัดออกก่อน return ทุกครั้ง)
 // ---------------------------------------------------------------
+function hashPassword_(plain) {
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(plain), Utilities.Charset.UTF_8);
+  return bytes.map(b => ((b < 0 ? b + 256 : b).toString(16)).padStart(2, "0")).join("");
+}
+
+function sanitizeUser_(u) {
+  const copy = Object.assign({}, u);
+  delete copy.Password;
+  return copy;
+}
+
 function listUsers_() {
-  return readAllRows_(USERS_SHEET_NAME, USERS_HEADERS);
+  return readAllRows_(USERS_SHEET_NAME, USERS_HEADERS).map(sanitizeUser_);
+}
+
+function login_(id, password) {
+  const row = readAllRows_(USERS_SHEET_NAME, USERS_HEADERS).find(r => r.Id === Number(id));
+  if (!row) throw new Error("ไม่พบผู้ใช้งาน");
+  if (!row.Active) throw new Error("บัญชีนี้ถูกปิดใช้งาน ติดต่อ Safety Admin");
+  if (!row.Password) throw new Error("บัญชีนี้ยังไม่ได้ตั้งรหัสผ่าน ติดต่อ Safety Admin ให้ตั้งรหัสผ่านก่อน");
+  if (hashPassword_(password) !== row.Password) throw new Error("รหัสผ่านไม่ถูกต้อง");
+  return sanitizeUser_(row);
 }
 
 function createUser_(fields) {
@@ -318,10 +372,11 @@ function createUser_(fields) {
   lock.waitLock(10000);
   try {
     const id = nextId_(USERS_SHEET_NAME, USERS_HEADERS);
-    const record = Object.assign({ Id: id, Active: true, Shop: "" }, fields, { Id: id });
+    const record = Object.assign({ Id: id, Active: true, Shop: "", Password: "" }, fields, { Id: id });
+    if (record.Password) record.Password = hashPassword_(record.Password);
     const row = USERS_HEADERS.map(h => (record[h] !== undefined && record[h] !== null) ? record[h] : "");
     getSheet_(USERS_SHEET_NAME).appendRow(row);
-    return record;
+    return sanitizeUser_(record);
   } finally {
     lock.releaseLock();
   }
@@ -335,10 +390,13 @@ function updateUser_(id, fields) {
     if (rowNum === -1) throw new Error("ไม่พบผู้ใช้งานรหัส " + id);
     const sheet = getSheet_(USERS_SHEET_NAME);
     const before = rowToObject_(USERS_HEADERS, sheet.getRange(rowNum, 1, 1, USERS_HEADERS.length).getValues()[0]);
-    const after = Object.assign({}, before, fields, { Id: before.Id });
+    const patch = Object.assign({}, fields);
+    if (patch.Password) patch.Password = hashPassword_(patch.Password);
+    else delete patch.Password; // เว้นว่าง = ไม่เปลี่ยนรหัสผ่านเดิม
+    const after = Object.assign({}, before, patch, { Id: before.Id });
     const row = USERS_HEADERS.map(h => (after[h] !== undefined && after[h] !== null) ? after[h] : "");
     sheet.getRange(rowNum, 1, 1, USERS_HEADERS.length).setValues([row]);
-    return after;
+    return sanitizeUser_(after);
   } finally {
     lock.releaseLock();
   }
