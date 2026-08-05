@@ -42,7 +42,7 @@
 | Dashboard | ทุกคน | กราฟ Grade / Category / อัตราปิดงานตรงเวลารายเดือน / พื้นที่ปัญหาซ้ำ |
 | รายงานผู้บริหาร | ทุกคน | รูปแบบ SES/F-PES เดิม พิมพ์เป็น PDF หรือ export CSV |
 | จัดการผู้ใช้งาน | เฉพาะ Safety Admin | เพิ่ม/แก้ไขผู้ใช้งาน — พิมพ์ชื่อ-อีเมลใครก็ได้ ไม่ต้องมีบัญชีมาก่อน กำหนด Role/Shop ให้แต่ละคน |
-| ตั้งค่า | เฉพาะ Safety Admin | แก้อีเมลแจ้งเตือน (Safety Officer/MGR/AGMGM/หัวหน้างานแต่ละ Shop), `SLA_Escalation_Days_Before`, `Frontend_Base_URL`, `MS365_Backup_Email` — บันทึกแล้วมีผลทันที ไม่ต้องเปิด Google Sheet ไปแก้แท็บ Settings เอง (เรียก action `listSettings`/`updateSettings` ใน `.gs`) |
+| ตั้งค่า | เฉพาะ Safety Admin | แก้อีเมลแจ้งเตือน (Safety Officer/MGR/AGMGM/หัวหน้างานแต่ละ Shop), `SLA_Escalation_Days_Before`, `Frontend_Base_URL`, `MS365_Backup_Email`, **`TypeOfAudit_Options`** (รายการตัวเลือก dropdown "ประเภทการตรวจ" ในฟอร์มบันทึกรายการตรวจใหม่ คั่นด้วยจุลภาค) — บันทึกแล้วมีผลทันที ไม่ต้องเปิด Google Sheet ไปแก้แท็บ Settings เอง (เรียก action `listSettings`/`updateSettings` ใน `.gs`) |
 
 การปิดงาน **บังคับแนบรูปหลังแก้ไขก่อน** — ปุ่มปิดงานจะเปลี่ยนสถานะไม่ได้จนกว่าจะมีรูป และระบบบันทึก
 ชื่อผู้ปิดงาน + เวลาอัตโนมัติจากบัญชีที่ login อยู่ (ไม่ต้องพิมพ์ชื่อเอง — กันการสวมรอย)
@@ -128,7 +128,8 @@ SMTP) ทันทีที่มีการเปลี่ยนแปลง�
 
 ## Google Sheet: แท็บ Findings (17 คอลัมน์)
 
-`Id` (auto) · `TypeOfAudit` (พิมพ์อิสระ เช่น Planned/Unplanned) · `PatrolDate` ·
+`Id` (auto) · `TypeOfAudit` (dropdown เลือกจากรายการ — ตัวเลือกกำหนดได้เองที่แท็บ "ตั้งค่า" คีย์
+`TypeOfAudit_Options`) · `PatrolDate` ·
 `Shop` (PDI/Acc/Yard/Washing/Touch up/Store/อื่นๆ) · `Place` ·
 `Description` · `Grade` (A/B/C/Others) · `Category` (F/S/EES/5S) · `PhotoBeforeUrl` · `DueDate` ·
 `RootCause` · `ActionResponsible` · `Countermeasure` · `PhotoAfterUrl` ·

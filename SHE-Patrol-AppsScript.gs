@@ -60,6 +60,7 @@ const STATUS_OPEN = ["เปิดใหม่", "รอดำเนินกา
 const DEFAULT_SETTINGS = [
   ["Key", "Value", "คำอธิบาย"],
   ["Frontend_Base_URL", "", "URL ของเว็บที่โฮสต์ index.html เช่น https://ชื่อบัญชี.github.io/SHE-Patrol/ — ใช้สร้าง deep link ในอีเมล"],
+  ["TypeOfAudit_Options", "Planned,Unplanned,Follow-up,Special", "รายการตัวเลือก 'ประเภทการตรวจ' ในฟอร์มบันทึกรายการตรวจใหม่ — คั่นแต่ละตัวเลือกด้วยจุลภาค (,) แก้ไขแล้วมีผลทันที"],
   ["Safety_Officer_Email", "", "รับแจ้งเตือนตอนมีรายการ 'รอตรวจสอบ'"],
   ["MGR_Email", "", "อีเมล MGR สำหรับ escalate Grade A/B ที่เลย/ใกล้กำหนด"],
   ["AGMGM_Email", "", "อีเมล AGM/GM สำหรับ escalate Grade A ที่เลย/ใกล้กำหนด"],
@@ -106,10 +107,15 @@ function setupSheet() {
   // เก็บคอลัมน์ Value เป็นข้อความล้วน กัน Sheets auto-parse ค่าที่ดูเหมือนตัวเลข (เช่น
   // SLA_Escalation_Days_Before = "2") ให้กลายเป็นตัวเลขจริง ซึ่งทำให้หน้าตั้งค่าใน index.html พังได้
   settingsSheet.getRange(1, 2, 2000, 1).setNumberFormat("@");
+  settingsSheet.getRange(1, 1, 1, 3).setValues([DEFAULT_SETTINGS[0]]);
+  // เติมเฉพาะ "คีย์ที่ยังไม่มี" ต่อท้ายชีตเสมอ — เทียบตามคีย์ ไม่ใช่ตำแหน่ง/จำนวนแถว เพราะถ้าเทียบ
+  // แค่จำนวนแถว การแทรกคีย์ใหม่ตรงกลาง DEFAULT_SETTINGS (ไม่ใช่ต่อท้าย) จะทำให้ชีตที่เคยรัน setupSheet
+  // ไปแล้วได้ค่าเพี้ยน (index ไม่ตรงของเดิม)
   const existingRows = settingsSheet.getLastRow();
-  if (existingRows < DEFAULT_SETTINGS.length) {
-    settingsSheet.getRange(existingRows + 1, 1, DEFAULT_SETTINGS.length - existingRows, 3)
-      .setValues(DEFAULT_SETTINGS.slice(existingRows));
+  const existingKeys = existingRows >= 2 ? settingsSheet.getRange(2, 1, existingRows - 1, 1).getValues().flat() : [];
+  const missingRows = DEFAULT_SETTINGS.slice(1).filter(row => existingKeys.indexOf(row[0]) === -1);
+  if (missingRows.length) {
+    settingsSheet.getRange(Math.max(existingRows, 1) + 1, 1, missingRows.length, 3).setValues(missingRows);
   }
   // แปลงค่าที่มีอยู่แล้วให้เป็นข้อความ เผื่อเคยถูก Sheets auto-parse เป็นตัวเลข/boolean ไปก่อนหน้านี้
   if (existingRows >= 2) {

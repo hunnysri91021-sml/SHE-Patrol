@@ -481,7 +481,9 @@
     </div>
     <div class="modal-body">
       <div class="grid2">
-        <div class="field"><label>ประเภทการตรวจ</label><input type="text" id="f_typeOfAudit" placeholder="เช่น Planned / Unplanned"></div>
+        <div class="field"><label>ประเภทการตรวจ</label>
+          <select id="f_typeOfAudit"><option value="">-- เลือก --</option></select>
+        </div>
         <div class="field"><label>วันที่ตรวจ *</label><input type="date" id="f_patrolDate"></div>
         <div class="field"><label>หน่วยงาน/Shop *</label>
           <select id="f_shop">
@@ -969,9 +971,10 @@ const SheUsersAPI = (function () {
 
 const SheSettingsAPI = (function () {
   const DEMO_KEY = "she_patrol_demo_settings";
-  const DEMO_SEED_VERSION = "2026-08-settings-v1";
+  const DEMO_SEED_VERSION = "2026-08-settings-v2-typeofaudit";
   const DEFAULT_SETTINGS = [
     { Key: "Frontend_Base_URL", Value: "", Description: "URL ของเว็บที่โฮสต์ index.html เช่น https://ชื่อบัญชี.github.io/SHE-Patrol/ — ใช้สร้าง deep link ในอีเมลแจ้งเตือน" },
+    { Key: "TypeOfAudit_Options", Value: "Planned,Unplanned,Follow-up,Special", Description: "รายการตัวเลือก 'ประเภทการตรวจ' ในฟอร์มบันทึกรายการตรวจใหม่ — คั่นแต่ละตัวเลือกด้วยจุลภาค (,) แก้ไขแล้วมีผลทันที" },
     { Key: "Safety_Officer_Email", Value: "", Description: "รับแจ้งเตือนตอนมีรายการสถานะ 'รอตรวจสอบ'" },
     { Key: "MGR_Email", Value: "", Description: "อีเมล MGR สำหรับ escalate Grade A/B ที่เลย/ใกล้กำหนด" },
     { Key: "AGMGM_Email", Value: "", Description: "อีเมล AGM/GM สำหรับ escalate Grade A ที่เลย/ใกล้กำหนด" },
@@ -1163,8 +1166,21 @@ document.getElementById("f_photoBefore").addEventListener("change", async e => {
   img.src = URL.createObjectURL(selectedPhotoBeforeFile);
   img.style.display = "block";
 });
-document.getElementById("newFindingBtn").addEventListener("click", () => {
+async function populateTypeOfAuditSelect() {
+  const sel = document.getElementById("f_typeOfAudit");
+  sel.innerHTML = '<option value="">-- เลือก --</option>';
+  try {
+    const settings = await SheSettingsAPI.list();
+    const raw = settings.find(s => s.Key === "TypeOfAudit_Options")?.Value || "";
+    const options = raw.split(",").map(s => s.trim()).filter(Boolean);
+    options.forEach(opt => sel.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`));
+  } catch (err) {
+    // เงียบไว้พอ — ยังใช้ "-- เลือก --" อย่างเดียวได้ ไม่บล็อกการสร้างรายการ
+  }
+}
+document.getElementById("newFindingBtn").addEventListener("click", async () => {
   if (!canCreate()) { alert("บทบาทปัจจุบันไม่มีสิทธิ์สร้างรายการใหม่ (เฉพาะผู้ตรวจ / Safety Admin)"); return; }
+  await populateTypeOfAuditSelect();
   document.getElementById("f_typeOfAudit").value = "";
   document.getElementById("f_patrolDate").value = todayStr();
   document.getElementById("f_shop").value = "";
