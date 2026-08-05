@@ -1467,19 +1467,28 @@ async function saveProgress(id) {
 async function applyStatusChange(id) {
   const f = findings.find(x => String(x.Id) === String(id));
   const newStatus = document.getElementById("d_statusChange").value;
-  if (newStatus === f.Status) return;
+  if (newStatus === f.Status) { alert("ยังไม่ได้เปลี่ยนสถานะ — เลือกสถานะใหม่ในช่องก่อนกด \"อัปเดตสถานะ\""); return; }
   if (newStatus === "ปิดงาน") {
     if (!f.PhotoAfterUrl) { alert('ต้องแนบ "รูปหลังแก้ไข" ก่อนปิดงาน'); return; }
     pendingCloseId = id;
     openModal("closeModalBackdrop");
     return;
   }
+  const btn = document.getElementById("applyStatusBtn");
+  btn.disabled = true; btn.textContent = "กำลังอัปเดต...";
   try {
     await SheAPI.update(f.Id, { Status: newStatus });
     await loadFindings();
     renderList();
     openDetail(id);
-  } catch (err) { alert("เกิดข้อผิดพลาด: " + err.message); }
+  } catch (err) {
+    alert("เกิดข้อผิดพลาด: " + err.message);
+  } finally {
+    if (document.getElementById("applyStatusBtn")) {
+      document.getElementById("applyStatusBtn").disabled = false;
+      document.getElementById("applyStatusBtn").textContent = "อัปเดตสถานะ";
+    }
+  }
 }
 
 document.getElementById("confirmCloseBtn").addEventListener("click", async () => {
