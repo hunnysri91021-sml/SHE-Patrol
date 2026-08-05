@@ -481,6 +481,7 @@
     </div>
     <div class="modal-body">
       <div class="grid2">
+        <div class="field"><label>ประเภทการตรวจ</label><input type="text" id="f_typeOfAudit" placeholder="เช่น Planned / Unplanned"></div>
         <div class="field"><label>วันที่ตรวจ *</label><input type="date" id="f_patrolDate"></div>
         <div class="field"><label>หน่วยงาน/Shop *</label>
           <select id="f_shop">
@@ -1164,6 +1165,7 @@ document.getElementById("f_photoBefore").addEventListener("change", async e => {
 });
 document.getElementById("newFindingBtn").addEventListener("click", () => {
   if (!canCreate()) { alert("บทบาทปัจจุบันไม่มีสิทธิ์สร้างรายการใหม่ (เฉพาะผู้ตรวจ / Safety Admin)"); return; }
+  document.getElementById("f_typeOfAudit").value = "";
   document.getElementById("f_patrolDate").value = todayStr();
   document.getElementById("f_shop").value = "";
   document.getElementById("f_place").value = "";
@@ -1178,6 +1180,7 @@ document.getElementById("newFindingBtn").addEventListener("click", () => {
   openModal("newModalBackdrop");
 });
 document.getElementById("saveNewBtn").addEventListener("click", async () => {
+  const typeOfAudit = document.getElementById("f_typeOfAudit").value.trim();
   const patrolDate = document.getElementById("f_patrolDate").value;
   const shop = document.getElementById("f_shop").value;
   const place = document.getElementById("f_place").value.trim();
@@ -1188,7 +1191,7 @@ document.getElementById("saveNewBtn").addEventListener("click", async () => {
   const btn = document.getElementById("saveNewBtn");
   btn.disabled = true; btn.textContent = "กำลังบันทึก...";
   try {
-    const fields = { PatrolDate: patrolDate, Shop: shop, Place: place, Description: description, Grade: grade, Category: category, DueDate: calcDueDate(patrolDate, grade), Status: "เปิดใหม่" };
+    const fields = { TypeOfAudit: typeOfAudit, PatrolDate: patrolDate, Shop: shop, Place: place, Description: description, Grade: grade, Category: category, DueDate: calcDueDate(patrolDate, grade), Status: "เปิดใหม่" };
     const created = await SheAPI.create(fields);
     if (selectedPhotoBeforeFile) {
       const url = await SheAPI.uploadPhoto(selectedPhotoBeforeFile, created.Id, "ก่อนแก้ไข");
@@ -1225,6 +1228,7 @@ async function openDetail(id) {
 
   body.innerHTML = `
     <div class="detail-row"><div class="k">รหัส Finding</div><div class="v">${findingCode(f)}</div></div>
+    <div class="detail-row"><div class="k">ประเภทการตรวจ</div><div class="v">${escapeHtml(f.TypeOfAudit) || "-"}</div></div>
     <div class="detail-row"><div class="k">วันที่ตรวจ</div><div class="v">${fmtDate(f.PatrolDate)}</div></div>
     <div class="detail-row"><div class="k">หน่วยงาน</div><div class="v">${f.Shop}</div></div>
     <div class="detail-row"><div class="k">Grade / ประเภท</div><div class="v"><span class="badge grade-${f.Grade}" style="display:inline-block">${f.Grade}</span> &nbsp;${f.Category || "-"}</div></div>
@@ -1364,9 +1368,9 @@ document.getElementById("confirmCloseBtn").addEventListener("click", async () =>
  * ====================================================================== */
 function exportRowsToCsv(list, filename) {
   if (!list.length) { alert("ไม่มีข้อมูลให้ export ในตัวกรองนี้"); return; }
-  const headers = ["No", "วันที่ตรวจ", "หน่วยงาน", "จุดที่พบ", "รายละเอียด", "Grade", "ประเภท", "กำหนดปิดงาน", "สาเหตุ", "ผู้รับผิดชอบ", "มาตรการแก้ไข", "สถานะ", "ผู้ตรวจสอบปิดงาน", "วันเวลาปิดงาน"];
+  const headers = ["No", "ประเภทการตรวจ", "วันที่ตรวจ", "หน่วยงาน", "จุดที่พบ", "รายละเอียด", "Grade", "ประเภท", "กำหนดปิดงาน", "สาเหตุ", "ผู้รับผิดชอบ", "มาตรการแก้ไข", "สถานะ", "ผู้ตรวจสอบปิดงาน", "วันเวลาปิดงาน"];
   const rows = list.map((f, i) => [
-    i + 1, f.PatrolDate, f.Shop, f.Place, f.Description, f.Grade, f.Category, f.DueDate,
+    i + 1, f.TypeOfAudit, f.PatrolDate, f.Shop, f.Place, f.Description, f.Grade, f.Category, f.DueDate,
     f.RootCause, f.ActionResponsible, f.Countermeasure, f.Status, f.VerifiedBy,
     f.Rules_Confirmed_DateTime ? new Date(f.Rules_Confirmed_DateTime).toLocaleString("th-TH") : "",
   ]);

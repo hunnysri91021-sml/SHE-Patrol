@@ -48,7 +48,7 @@ const SETTINGS_SHEET_NAME = "Settings";
 const PHOTOS_FOLDER_NAME = "SHE Patrol Photos";
 
 const FINDINGS_HEADERS = [
-  "Id", "PatrolDate", "Shop", "Place", "Description", "Grade", "Category",
+  "Id", "TypeOfAudit", "PatrolDate", "Shop", "Place", "Description", "Grade", "Category",
   "PhotoBeforeUrl", "DueDate", "RootCause", "ActionResponsible", "Countermeasure",
   "PhotoAfterUrl", "Status", "VerifiedBy", "Rules_Confirmed_DateTime",
 ];
@@ -82,6 +82,12 @@ function setupSheet() {
 
   let findingsSheet = ss.getSheetByName(FINDINGS_SHEET_NAME);
   if (!findingsSheet) findingsSheet = ss.insertSheet(FINDINGS_SHEET_NAME);
+  // Migration: ชีตเก่าไม่มีคอลัมน์ TypeOfAudit (คอลัมน์ B เดิมคือ PatrolDate) — แทรกคอลัมน์ว่างที่
+  // ตำแหน่ง B ก่อน เพื่อไม่ให้ข้อมูลเดิมเลื่อนทับผิดคอลัมน์ ทำครั้งเดียว (เช็ค header เดิมก่อนแทรก)
+  const existingFindingsHeaderB = findingsSheet.getRange(1, 2).getValue();
+  if (existingFindingsHeaderB && existingFindingsHeaderB !== "TypeOfAudit") {
+    findingsSheet.insertColumnBefore(2);
+  }
   findingsSheet.getRange(1, 1, 1, FINDINGS_HEADERS.length).setValues([FINDINGS_HEADERS]).setFontWeight("bold");
   findingsSheet.setFrozenRows(1);
   // เก็บวันที่/เวลาเป็นข้อความล้วน กัน Sheets auto-parse เป็น Date แล้วรูปแบบเพี้ยน

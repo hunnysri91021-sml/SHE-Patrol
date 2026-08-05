@@ -126,17 +126,24 @@ SMTP) ทันทีที่มีการเปลี่ยนแปลง�
    Trigger** → Function: `checkSlaEscalation`, Event source: Time-driven, Day timer, ช่วง 8-9 โมงเช้า
    → Save
 
-## Google Sheet: แท็บ Findings (16 คอลัมน์)
+## Google Sheet: แท็บ Findings (17 คอลัมน์)
 
-`Id` (auto) · `PatrolDate` · `Shop` (PDI/Acc/Yard/Washing/Touch up/Store/อื่นๆ) · `Place` ·
+`Id` (auto) · `TypeOfAudit` (พิมพ์อิสระ เช่น Planned/Unplanned) · `PatrolDate` ·
+`Shop` (PDI/Acc/Yard/Washing/Touch up/Store/อื่นๆ) · `Place` ·
 `Description` · `Grade` (A/B/C/Others) · `Category` (F/S/EES/5S) · `PhotoBeforeUrl` · `DueDate` ·
 `RootCause` · `ActionResponsible` · `Countermeasure` · `PhotoAfterUrl` ·
 `Status` (เปิดใหม่/รอดำเนินการ/ดำเนินการแล้ว/รอตรวจสอบ/ปิดงาน) · `VerifiedBy` · `Rules_Confirmed_DateTime`
 
+> `TypeOfAudit` เพิ่มเข้ามาทีหลัง (อยู่คอลัมน์ B ต่อจาก Id) — ถ้าเป็นชีตที่มีข้อมูลอยู่ก่อนแล้ว
+> `setupSheet()` จะแทรกคอลัมน์ว่างให้อัตโนมัติแบบไม่ทับข้อมูลเดิม (เช็คจาก header เดิมก่อนแทรก
+> ทำครั้งเดียว รันซ้ำได้ปลอดภัย) — รันเมนู "SHE Patrol" → "ตั้งค่าชีต (Setup)" อีกครั้งหลัง deploy
+> โค้ดใหม่เพื่อ migrate
+
 ## Google Sheet: แท็บ Users
 
 `Id` (auto) · `Name` · `Email` · `Role` (SHE-Auditor/SHE-Dept-Responsible/SHE-Safety-Admin/SHE-Executive-Viewer) ·
-`Shop` (เฉพาะ Dept-Responsible) · `Active` (TRUE/FALSE)
+`Shop` (เฉพาะ Dept-Responsible) · `Active` (TRUE/FALSE) · `Password` (SHA-256 hash — ดูหัวข้อ
+"เรื่องผู้ใช้งาน/สิทธิ์" ด้านบน)
 
 ## SLA ตาม Grade
 
