@@ -128,6 +128,37 @@ function shopLeadEmail_(shop) {
 }
 
 // ---------------------------------------------------------------
+// Settings — อ่าน/แก้ไขทั้งหมดผ่านแท็บ "ตั้งค่า" ในแอป (Admin เท่านั้น)
+// แทนการเปิด Google Sheet ไปแก้ทีละแถวในแท็บ Settings เอง
+// ---------------------------------------------------------------
+function listSettings_() {
+  const sheet = getSheet_(SETTINGS_SHEET_NAME);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  return sheet.getRange(2, 1, lastRow - 1, 3).getValues()
+    .filter(row => row[0] !== "")
+    .map(row => ({ Key: row[0], Value: row[1], Description: row[2] }));
+}
+
+function updateSettings_(values) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const sheet = getSheet_(SETTINGS_SHEET_NAME);
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return [];
+    const keys = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
+    Object.keys(values || {}).forEach(k => {
+      const idx = keys.indexOf(k);
+      if (idx !== -1) sheet.getRange(idx + 2, 2).setValue(values[k]);
+    });
+    return listSettings_();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ---------------------------------------------------------------
 // Router — front-end (index.html) POST { action, ...payload } ทุกครั้ง
 // (Content-Type: text/plain ฝั่ง front-end กัน CORS preflight — ดูหมายเหตุหัวไฟล์)
 // ---------------------------------------------------------------
@@ -154,6 +185,8 @@ function doPost(e) {
       case "createUser": return jsonResponse({ ok: true, data: createUser_(data.fields || {}) });
       case "updateUser": return jsonResponse({ ok: true, data: updateUser_(data.id, data.fields || {}) });
       case "uploadPhoto": return jsonResponse({ ok: true, data: uploadPhoto_(data.findingId, data.stage, data.fileName, data.contentBase64) });
+      case "listSettings": return jsonResponse({ ok: true, data: listSettings_() });
+      case "updateSettings": return jsonResponse({ ok: true, data: updateSettings_(data.values || {}) });
       default: return jsonResponse({ ok: false, error: "ไม่รู้จัก action: " + data.action });
     }
   } catch (err) {

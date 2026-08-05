@@ -312,6 +312,7 @@
     <button class="tab-btn" data-screen="dashboard">Dashboard</button>
     <button class="tab-btn" data-screen="report">รายงานผู้บริหาร</button>
     <button class="tab-btn" data-screen="admin" id="adminTabBtn" style="display:none;">จัดการผู้ใช้งาน</button>
+    <button class="tab-btn" data-screen="settings" id="settingsTabBtn" style="display:none;">ตั้งค่า</button>
   </nav>
 
   <div class="app">
@@ -416,9 +417,22 @@
       <div id="usersContainer"><div class="loading">กำลังโหลด...</div></div>
       <div class="info-banner" style="margin-top:16px;background:var(--gray-pale);color:var(--muted);">
         📧 การแจ้งเตือนทางอีเมล (finding ใหม่ / รอตรวจสอบ / เลยกำหนด SLA / ปิดงาน) ทำงานอัตโนมัติจาก
-        Google Apps Script เมื่อเชื่อมต่อจริงแล้ว (กรอกอีเมลในแท็บ Settings ของ Google Sheet) —
-        ดูไฟล์ <code>SHE-Patrol-AppsScript.gs</code> ในซอร์สโค้ด ไม่ต้องกดส่งเองในหน้านี้
+        Google Apps Script เมื่อเชื่อมต่อจริงแล้ว — ไปกรอก/แก้ไขอีเมลและพารามิเตอร์ต่างๆ ได้ที่แท็บ
+        "ตั้งค่า" ไม่ต้องเปิด Google Sheet ไปแก้เองอีกต่อไป
       </div>
+    </div>
+
+    <!-- ---------- SCREEN: SETTINGS (Admin only) ---------- -->
+    <div id="screen-settings" style="display:none;">
+      <div class="info-banner">
+        ตั้งค่าอีเมลแจ้งเตือนและพารามิเตอร์ระบบที่นี่ — บันทึกแล้วมีผลทันทีกับอีเมลแจ้งเตือนอัตโนมัติและ
+        SLA escalation ของระบบ ไม่ต้องเปิด Google Sheet ไปแก้ในแท็บ Settings เอง
+      </div>
+      <div class="list-header">
+        <h2>ตั้งค่าระบบ</h2>
+        <button class="btn btn-accent btn-sm" id="saveSettingsBtn">บันทึกการตั้งค่า</button>
+      </div>
+      <div id="settingsContainer"><div class="loading">กำลังโหลด...</div></div>
     </div>
 
   </div>
@@ -902,6 +916,51 @@ const SheUsersAPI = (function () {
   };
 })();
 
+const SheSettingsAPI = (function () {
+  const DEMO_KEY = "she_patrol_demo_settings";
+  const DEMO_SEED_VERSION = "2026-08-settings-v1";
+  const DEFAULT_SETTINGS = [
+    { Key: "Frontend_Base_URL", Value: "", Description: "URL ของเว็บที่โฮสต์ index.html เช่น https://ชื่อบัญชี.github.io/SHE-Patrol/ — ใช้สร้าง deep link ในอีเมลแจ้งเตือน" },
+    { Key: "Safety_Officer_Email", Value: "", Description: "รับแจ้งเตือนตอนมีรายการสถานะ 'รอตรวจสอบ'" },
+    { Key: "MGR_Email", Value: "", Description: "อีเมล MGR สำหรับ escalate Grade A/B ที่เลย/ใกล้กำหนด" },
+    { Key: "AGMGM_Email", Value: "", Description: "อีเมล AGM/GM สำหรับ escalate Grade A ที่เลย/ใกล้กำหนด" },
+    { Key: "Shop_Email_PDI", Value: "", Description: "อีเมลหัวหน้างาน PDI" },
+    { Key: "Shop_Email_Acc", Value: "", Description: "อีเมลหัวหน้างาน Acc" },
+    { Key: "Shop_Email_Yard", Value: "", Description: "อีเมลหัวหน้างาน Yard" },
+    { Key: "Shop_Email_Washing", Value: "", Description: "อีเมลหัวหน้างาน Washing" },
+    { Key: "Shop_Email_Touch up", Value: "", Description: "อีเมลหัวหน้างาน Touch up" },
+    { Key: "Shop_Email_Store", Value: "", Description: "อีเมลหัวหน้างาน Store" },
+    { Key: "Shop_Email_อื่นๆ", Value: "", Description: "อีเมลหัวหน้างาน อื่นๆ (ใช้เป็น fallback ด้วยถ้า Shop อื่นไม่ได้กรอกอีเมล)" },
+    { Key: "SLA_Escalation_Days_Before", Value: "2", Description: "แจ้งเตือนล่วงหน้ากี่วันก่อนถึงกำหนด (เช็คทุกวัน)" },
+    { Key: "MS365_Backup_Email", Value: "", Description: "อีเมล Microsoft 365 (Outlook) ที่จะรับไฟล์สำรองข้อมูล .xlsx รายสัปดาห์ — เว้นว่างถ้ายังไม่ต้องการสำรอง" },
+  ];
+
+  function demoSeed() {
+    localStorage.setItem(DEMO_KEY, JSON.stringify(DEFAULT_SETTINGS));
+    localStorage.setItem(DEMO_KEY + "_version", DEMO_SEED_VERSION);
+    return DEFAULT_SETTINGS;
+  }
+  function demoRead() {
+    if (localStorage.getItem(DEMO_KEY + "_version") !== DEMO_SEED_VERSION) return demoSeed();
+    try { return JSON.parse(localStorage.getItem(DEMO_KEY)) || demoSeed(); } catch (e) { return demoSeed(); }
+  }
+  async function demoList() { return demoRead(); }
+  async function demoUpdate(values) {
+    const rows = demoRead().map(r => ({ ...r, Value: values[r.Key] !== undefined ? values[r.Key] : r.Value }));
+    localStorage.setItem(DEMO_KEY, JSON.stringify(rows));
+    return rows;
+  }
+
+  async function liveList() { return apiCall("listSettings"); }
+  async function liveUpdate(values) { return apiCall("updateSettings", { values }); }
+
+  return {
+    LIVE,
+    async list() { return LIVE ? liveList() : demoList(); },
+    async update(values) { return LIVE ? liveUpdate(values) : demoUpdate(values); },
+  };
+})();
+
 /* ======================================================================
  * Role helpers, session (login) — Admin assigns Role/Shop via SHE_Patrol_Users,
  * the signed-in user only picks WHO they are, never their own role.
@@ -1295,7 +1354,7 @@ document.getElementById("clearFilterBtn").addEventListener("click", () => {
  * ====================================================================== */
 function switchScreen(name) {
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.screen === name));
-  ["home", "dashboard", "report", "admin"].forEach(s => {
+  ["home", "dashboard", "report", "admin", "settings"].forEach(s => {
     document.getElementById("screen-" + s).style.display = s === name ? "block" : "none";
   });
   if (name === "dashboard") renderDashboardCharts();
@@ -1303,6 +1362,10 @@ function switchScreen(name) {
   if (name === "admin") {
     if (!canManageUsers()) { alert("เฉพาะ Admin เท่านั้นที่เข้าเมนูนี้ได้"); switchScreen("home"); return; }
     renderUsersTable();
+  }
+  if (name === "settings") {
+    if (!canManageUsers()) { alert("เฉพาะ Admin เท่านั้นที่เข้าเมนูนี้ได้"); switchScreen("home"); return; }
+    renderSettingsForm();
   }
 }
 document.querySelectorAll(".tab-btn").forEach(btn => btn.addEventListener("click", () => switchScreen(btn.dataset.screen)));
@@ -1485,6 +1548,59 @@ document.getElementById("saveUserBtn").addEventListener("click", async () => {
 });
 
 /* ======================================================================
+ * Settings (Admin only) — email addresses & SLA params, replaces editing
+ * the Google Sheet "Settings" tab by hand
+ * ====================================================================== */
+function settingInputType(key) {
+  if (key.includes("Email")) return "email";
+  if (key.includes("Days")) return "number";
+  if (key.includes("URL")) return "url";
+  return "text";
+}
+
+async function renderSettingsForm() {
+  const container = document.getElementById("settingsContainer");
+  container.innerHTML = '<div class="loading">กำลังโหลด...</div>';
+  let settings;
+  try {
+    settings = await SheSettingsAPI.list();
+  } catch (err) {
+    container.innerHTML = `<div class="empty">โหลดการตั้งค่าไม่สำเร็จ: ${escapeHtml(err.message)}<br><button class="btn btn-ghost btn-sm" style="margin-top:10px;" id="retrySettingsLoad">ลองใหม่</button></div>`;
+    document.getElementById("retrySettingsLoad")?.addEventListener("click", renderSettingsForm);
+    return;
+  }
+  if (!settings.length) { container.innerHTML = '<div class="empty">ยังไม่มีค่าตั้งค่า — รัน setupSheet() ในไฟล์ .gs ก่อน</div>'; return; }
+  container.innerHTML = `
+    <div class="grid2">
+      ${settings.map(s => `
+        <div class="field">
+          <label>${escapeHtml(s.Key)}</label>
+          <input type="${settingInputType(s.Key)}" data-setting-key="${escapeHtml(s.Key)}" value="${escapeHtml(s.Value || "")}">
+          <div class="sla-hint">${escapeHtml(s.Description || "")}</div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+document.getElementById("saveSettingsBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("saveSettingsBtn");
+  const values = {};
+  document.querySelectorAll("#settingsContainer [data-setting-key]").forEach(inp => {
+    values[inp.dataset.settingKey] = inp.value.trim();
+  });
+  btn.disabled = true; btn.textContent = "กำลังบันทึก...";
+  try {
+    await SheSettingsAPI.update(values);
+    alert("บันทึกการตั้งค่าเรียบร้อย");
+  } catch (err) {
+    alert("เกิดข้อผิดพลาด: " + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "บันทึกการตั้งค่า";
+  }
+});
+
+/* ======================================================================
  * Login / session bootstrap
  * ====================================================================== */
 let loginUsersCache = [];
@@ -1528,7 +1644,10 @@ async function showApp() {
   document.getElementById("appShell").style.display = "block";
   document.getElementById("userChipName").textContent = u.Name;
   document.getElementById("userChipRole").textContent = ROLE_LABELS[roleShortCode(u.Role)];
-  if (canManageUsers()) document.getElementById("adminTabBtn").style.display = "";
+  if (canManageUsers()) {
+    document.getElementById("adminTabBtn").style.display = "";
+    document.getElementById("settingsTabBtn").style.display = "";
+  }
   if (!SheAPI.LIVE) document.getElementById("demoFlag").style.display = "block";
   document.getElementById("storageNote").textContent = SheAPI.LIVE
     ? "เชื่อมต่อ Google Sheets จริง — ข้อมูลนี้ share กับทุกคนที่ใช้ระบบ ไม่ว่าจะมีบัญชี Microsoft 365 หรือไม่"
