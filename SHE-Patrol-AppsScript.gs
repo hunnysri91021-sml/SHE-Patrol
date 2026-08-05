@@ -92,10 +92,18 @@ function setupSheet() {
 
   let settingsSheet = ss.getSheetByName(SETTINGS_SHEET_NAME);
   if (!settingsSheet) settingsSheet = ss.insertSheet(SETTINGS_SHEET_NAME);
+  // เก็บคอลัมน์ Value เป็นข้อความล้วน กัน Sheets auto-parse ค่าที่ดูเหมือนตัวเลข (เช่น
+  // SLA_Escalation_Days_Before = "2") ให้กลายเป็นตัวเลขจริง ซึ่งทำให้หน้าตั้งค่าใน index.html พังได้
+  settingsSheet.getRange(1, 2, 2000, 1).setNumberFormat("@");
   const existingRows = settingsSheet.getLastRow();
   if (existingRows < DEFAULT_SETTINGS.length) {
     settingsSheet.getRange(existingRows + 1, 1, DEFAULT_SETTINGS.length - existingRows, 3)
       .setValues(DEFAULT_SETTINGS.slice(existingRows));
+  }
+  // แปลงค่าที่มีอยู่แล้วให้เป็นข้อความ เผื่อเคยถูก Sheets auto-parse เป็นตัวเลข/boolean ไปก่อนหน้านี้
+  if (existingRows >= 2) {
+    const valRange = settingsSheet.getRange(2, 2, existingRows - 1, 1);
+    valRange.setValues(valRange.getValues().map(row => [row[0] === "" ? "" : String(row[0])]));
   }
   settingsSheet.getRange(1, 1, 1, 3).setFontWeight("bold");
   settingsSheet.setFrozenRows(1);

@@ -1016,7 +1016,7 @@ function canManageUsers() { return currentRole() === "admin"; }
 function todayStr() { return new Date().toISOString().slice(0, 10); }
 function isOverdueRow(f) { return STATUS_OPEN.includes(f.Status) && daysUntil(f.DueDate) < 0; }
 function fmtDate(s) { return fmtThaiDate(s); }
-function escapeHtml(s) { return (s || "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function escapeHtml(s) { return String(s === undefined || s === null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
 function compressImage(file, maxDim = 1280, quality = 0.75) {
   return new Promise((resolve, reject) => {
