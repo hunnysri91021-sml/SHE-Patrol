@@ -390,6 +390,20 @@
     <!-- ---------- SCREEN: DASHBOARD (charts) ---------- -->
     <div id="screen-dashboard" style="display:none;">
       <div class="cards" id="dashCards2"></div>
+
+      <div class="toolbar no-print" style="margin-bottom:14px;">
+        <div class="field">
+          <label>เดือนที่ตรวจ</label>
+          <select id="shopChartMonth"><option value="">ทุกเดือน</option></select>
+        </div>
+        <div style="flex:1"></div>
+        <button class="btn btn-ghost" id="shopChartExportBtn">⬇ ดาวน์โหลดสรุป (CSV)</button>
+      </div>
+      <div class="chart-card" style="margin-bottom:14px;">
+        <h3>แต่ละ Shop — พบ / แก้ไขแล้ว / คงเหลือ</h3>
+        <div class="chart-wrap"><canvas id="shopChart"></canvas></div>
+      </div>
+
       <div class="chart-grid">
         <div class="chart-card"><h3>สัดส่วนตาม Grade</h3><div class="chart-wrap"><canvas id="gradeChart"></canvas></div></div>
         <div class="chart-card"><h3>สัดส่วนตาม Category</h3><div class="chart-wrap"><canvas id="categoryChart"></canvas></div></div>
@@ -1478,10 +1492,56 @@ function countBy(rows, keyFn) { const m = {}; rows.forEach(r => { const k = keyF
 const GRADE_PALETTE = { A: "#C00000", B: "#C05621", C: "#1F3864", Others: "#718096" };
 const CAT_PALETTE = { F: "#C00000", S: "#1F3864", EES: "#2F855A", "5S": "#B7791F" };
 
+function computeShopAgg(rows) {
+  return SHOP_OPTIONS.map(shop => {
+    const shopRows = rows.filter(r => r.Shop === shop);
+    const found = shopRows.length;
+    const fixed = shopRows.filter(r => r.Status === "ปิดงาน").length;
+    return { shop, found, fixed, remaining: found - fixed };
+  });
+}
+function shopChartFilteredRows() {
+  const m = document.getElementById("shopChartMonth").value;
+  return m ? findings.filter(r => r.PatrolDate.slice(0, 7) === m) : findings;
+}
+function renderShopChart() {
+  const months = [...new Set(findings.map(r => r.PatrolDate.slice(0, 7)))].sort().reverse();
+  fillSelectOnce("shopChartMonth", months);
+  const agg = computeShopAgg(shopChartFilteredRows());
+  if (chartInstances.shop) chartInstances.shop.destroy();
+  chartInstances.shop = new Chart(document.getElementById("shopChart"), {
+    type: "bar",
+    data: {
+      labels: agg.map(a => a.shop),
+      datasets: [
+        { label: "พบ", data: agg.map(a => a.found), backgroundColor: "#1F3864", borderRadius: 6 },
+        { label: "แก้ไขแล้ว", data: agg.map(a => a.fixed), backgroundColor: "#2F855A", borderRadius: 6 },
+        { label: "คงเหลือ", data: agg.map(a => a.remaining), backgroundColor: "#C00000", borderRadius: 6 },
+      ],
+    },
+    options: { maintainAspectRatio: false, plugins: { legend: { position: "bottom" } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } },
+  });
+}
+function exportShopSummaryCsv() {
+  const agg = computeShopAgg(shopChartFilteredRows());
+  const month = document.getElementById("shopChartMonth").value;
+  const headers = ["Shop", "พบ", "แก้ไขแล้ว", "คงเหลือ"];
+  const csvRows = agg.map(a => [a.shop, a.found, a.fixed, a.remaining]);
+  const csv = [headers, ...csvRows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `SHE_Patrol_Shop_Summary_${month || "all"}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+document.getElementById("shopChartMonth").addEventListener("change", renderShopChart);
+document.getElementById("shopChartExportBtn").addEventListener("click", exportShopSummaryCsv);
+
 function renderDashboardCharts() {
   const rows = findings;
   renderKpiCards("dashCards2", rows);
   destroyCharts();
+  renderShopChart();
 
   const gradeCounts = countBy(rows, r => r.Grade);
   chartInstances.grade = new Chart(document.getElementById("gradeChart"), {
