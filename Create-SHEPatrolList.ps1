@@ -193,6 +193,22 @@ if ($activeField -and -not $activeField.DefaultValue) {
 # 3. Permission groups
 # --------------------------------------------------------------------------
 
+function Ensure-UniquePermissions {
+    param([string]$ListTitle)
+    $list = Get-PnPList -Identity $ListTitle
+    Get-PnPProperty -ClientObject $list -Property HasUniqueRoleAssignments | Out-Null
+    if (-not $list.HasUniqueRoleAssignments) {
+        Write-Host "  Breaking role inheritance on '$ListTitle' (keeping existing access) ..." -ForegroundColor Cyan
+        $list.BreakRoleInheritance($true, $false)
+        Invoke-PnPQuery
+    }
+}
+
+Write-Host "Preparing lists for unique permissions ..." -ForegroundColor Cyan
+Ensure-UniquePermissions -ListTitle $listName
+Ensure-UniquePermissions -ListTitle $libraryName
+Ensure-UniquePermissions -ListTitle $usersListName
+
 $groupDefs = @(
     @{ Name = "SHE-Auditor";            Role = "Contribute";  Description = "ผู้ตรวจ (SHE Committee / Safety Officer) — สร้าง finding ใหม่" }
     @{ Name = "SHE-Dept-Responsible";   Role = "Contribute";  Description = "หน่วยงานที่ถูกตรวจพบ — อัปเดตมาตรการแก้ไขและรูปหลัง (จำกัดเฉพาะแผนกตน ดูหมายเหตุด้านล่าง)" }
