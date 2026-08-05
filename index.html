@@ -203,6 +203,20 @@
   .pdpa-body p, .pdpa-body li{font-size:13px;color:var(--text);line-height:1.6;}
   .pdpa-body ul{margin:4px 0;padding-left:20px;}
 
+  /* ---- Connection status (topbar chip + Settings panel) ---- */
+  .conn-chip{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.12);padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);font-size:12px;color:#fff;}
+  .conn-dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+  .conn-dot.checking{background:var(--yellow);animation:connPulse 1.1s infinite;}
+  .conn-dot.on{background:#48BB78;}
+  .conn-dot.off{background:var(--accent);}
+  .conn-dot.demo{background:var(--muted);}
+  @keyframes connPulse{0%,100%{opacity:1;}50%{opacity:.35;}}
+  .conn-panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;box-shadow:var(--shadow);}
+  .conn-panel-row{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;flex-wrap:wrap;}
+  .conn-panel .conn-dot{width:10px;height:10px;}
+  .conn-detail{margin-top:10px;font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:4px;}
+  .conn-detail code{font-size:11.5px;background:var(--gray-pale);padding:2px 5px;border-radius:4px;}
+
   /* ---- App shell / nav ---- */
   .user-chip{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.12);padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);font-size:12.5px;}
   .user-chip b{font-weight:700;}
@@ -297,6 +311,10 @@
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:12px;">
+        <div class="conn-chip" id="connChip">
+          <span class="conn-dot" id="connDot"></span>
+          <span id="connText">กำลังตรวจสอบ...</span>
+        </div>
         <div class="user-chip">
           <span>👤 <b id="userChipName"></b></span>
           <span class="role-tag" id="userChipRole"></span>
@@ -424,6 +442,14 @@
 
     <!-- ---------- SCREEN: SETTINGS (Admin only) ---------- -->
     <div id="screen-settings" style="display:none;">
+      <div class="conn-panel">
+        <div class="conn-panel-row">
+          <span class="conn-dot" id="connDotSettings"></span>
+          <span id="connTextSettings">กำลังตรวจสอบ...</span>
+          <button class="btn btn-ghost btn-sm" id="checkConnBtn" style="margin-left:auto;">ทดสอบการเชื่อมต่อ</button>
+        </div>
+        <div class="conn-detail" id="connDetail"></div>
+      </div>
       <div class="info-banner">
         ตั้งค่าอีเมลแจ้งเตือนและพารามิเตอร์ระบบที่นี่ — บันทึกแล้วมีผลทันทีกับอีเมลแจ้งเตือนอัตโนมัติและ
         SLA escalation ของระบบ ไม่ต้องเปิด Google Sheet ไปแก้ในแท็บ Settings เอง
@@ -1366,6 +1392,7 @@ function switchScreen(name) {
   if (name === "settings") {
     if (!canManageUsers()) { alert("เฉพาะ Admin เท่านั้นที่เข้าเมนูนี้ได้"); switchScreen("home"); return; }
     renderSettingsForm();
+    refreshConnectionStatus();
   }
 }
 document.querySelectorAll(".tab-btn").forEach(btn => btn.addEventListener("click", () => switchScreen(btn.dataset.screen)));
@@ -1601,6 +1628,62 @@ document.getElementById("saveSettingsBtn").addEventListener("click", async () =>
 });
 
 /* ======================================================================
+ * Connection status — topbar chip (ทุกคนเห็น) + panel ในแท็บตั้งค่า (Admin)
+ * เช็คจริงด้วย action "ping" ไม่ใช่แค่เช็คว่าตั้งค่า API_URL ไว้หรือยัง
+ * ====================================================================== */
+function apiUrlDisplay() {
+  return APP_CONFIG.API_URL || "(ไม่ได้ตั้งค่า — อยู่ใน Demo Mode)";
+}
+
+function setConnDots(cls, msg) {
+  [document.getElementById("connDot"), document.getElementById("connDotSettings")].forEach(d => {
+    if (d) d.className = "conn-dot " + cls;
+  });
+  [document.getElementById("connText"), document.getElementById("connTextSettings")].forEach(t => {
+    if (t) t.textContent = msg;
+  });
+}
+
+function renderConnDetail(mode, checkedAt, errMsg) {
+  const el = document.getElementById("connDetail");
+  if (!el) return;
+  const modeLabel = mode === "demo" ? "Demo Mode (บันทึกใน browser นี้เท่านั้น ไม่ share กับใคร)" : "Live Mode (Google Sheets ผ่าน Apps Script)";
+  el.innerHTML = `
+    <div>โหมด: <b>${modeLabel}</b></div>
+    <div>API URL: <code>${escapeHtml(apiUrlDisplay())}</code></div>
+    ${checkedAt ? `<div>ตรวจสอบล่าสุด: ${checkedAt.toLocaleTimeString("th-TH")} น.</div>` : ""}
+    ${errMsg ? `<div style="color:var(--accent);">เชื่อมต่อไม่สำเร็จ: ${escapeHtml(errMsg)}</div>` : ""}
+  `;
+}
+
+async function refreshConnectionStatus() {
+  if (!LIVE) {
+    setConnDots("demo", "Demo Mode — ยังไม่เชื่อมต่อ Google Sheets");
+    renderConnDetail("demo", null);
+    return;
+  }
+  setConnDots("checking", "กำลังตรวจสอบ...");
+  const checkedAt = new Date();
+  try {
+    await apiCall("ping");
+    setConnDots("on", "ออนไลน์ — เชื่อมต่อ Google Sheets อยู่");
+    renderConnDetail("live", checkedAt);
+  } catch (err) {
+    setConnDots("off", "ออฟไลน์ — เชื่อมต่อ Google Sheets ไม่สำเร็จ");
+    renderConnDetail("live", checkedAt, err.message);
+  }
+}
+document.getElementById("checkConnBtn").addEventListener("click", refreshConnectionStatus);
+
+let connWatchStarted = false;
+function startConnectionWatch() {
+  refreshConnectionStatus();
+  if (connWatchStarted) return;
+  connWatchStarted = true;
+  setInterval(refreshConnectionStatus, 60000);
+}
+
+/* ======================================================================
  * Login / session bootstrap
  * ====================================================================== */
 let loginUsersCache = [];
@@ -1648,6 +1731,7 @@ async function showApp() {
     document.getElementById("adminTabBtn").style.display = "";
     document.getElementById("settingsTabBtn").style.display = "";
   }
+  startConnectionWatch();
   if (!SheAPI.LIVE) document.getElementById("demoFlag").style.display = "block";
   document.getElementById("storageNote").textContent = SheAPI.LIVE
     ? "เชื่อมต่อ Google Sheets จริง — ข้อมูลนี้ share กับทุกคนที่ใช้ระบบ ไม่ว่าจะมีบัญชี Microsoft 365 หรือไม่"

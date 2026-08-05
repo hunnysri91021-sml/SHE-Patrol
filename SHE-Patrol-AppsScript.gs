@@ -140,6 +140,12 @@ function listSettings_() {
     .map(row => ({ Key: row[0], Value: row[1], Description: row[2] }));
 }
 
+// เช็คว่า Web App ยังตอบสนองอยู่จริง (ใช้แสดงสถานะออนไลน์/ออฟไลน์ใน index.html)
+// ไม่แตะชีตเลย จึงเบาและไม่ติด LockService
+function ping_() {
+  return { status: "ok", serverTime: new Date().toISOString() };
+}
+
 function updateSettings_(values) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -187,6 +193,7 @@ function doPost(e) {
       case "uploadPhoto": return jsonResponse({ ok: true, data: uploadPhoto_(data.findingId, data.stage, data.fileName, data.contentBase64) });
       case "listSettings": return jsonResponse({ ok: true, data: listSettings_() });
       case "updateSettings": return jsonResponse({ ok: true, data: updateSettings_(data.values || {}) });
+      case "ping": return jsonResponse({ ok: true, data: ping_() });
       default: return jsonResponse({ ok: false, error: "ไม่รู้จัก action: " + data.action });
     }
   } catch (err) {
