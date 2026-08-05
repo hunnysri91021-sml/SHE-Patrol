@@ -61,6 +61,8 @@ const DEFAULT_SETTINGS = [
   ["Key", "Value", "คำอธิบาย"],
   ["Frontend_Base_URL", "", "URL ของเว็บที่โฮสต์ index.html เช่น https://ชื่อบัญชี.github.io/SHE-Patrol/ — ใช้สร้าง deep link ในอีเมล"],
   ["TypeOfAudit_Options", "Planned,Unplanned,Follow-up,Special", "รายการตัวเลือก 'ประเภทการตรวจ' ในฟอร์มบันทึกรายการตรวจใหม่ — คั่นแต่ละตัวเลือกด้วยจุลภาค (,) แก้ไขแล้วมีผลทันที"],
+  ["Shop_Options", "PDI,Acc,Yard,Washing,Touch up,Store,อื่นๆ", "รายการตัวเลือก 'หน่วยงาน/Shop' ในฟอร์ม/ตัวกรอง/จัดการผู้ใช้งาน — คั่นด้วยจุลภาค (,) — หมายเหตุ: ชื่อ Shop ที่เพิ่มใหม่จะยังไม่มีอีเมลแจ้งเตือนเฉพาะจนกว่าจะเพิ่มคีย์ Shop_Email_<ชื่อ Shop> เอง ไม่งั้นจะ fallback ไปที่ Shop_Email_อื่นๆ"],
+  ["Category_Options", "F,S,EES,5S", "รายการตัวเลือก 'ประเภท (STD)' ในฟอร์มบันทึกรายการตรวจใหม่ — คั่นด้วยจุลภาค (,) แก้ไขแล้วมีผลทันที"],
   ["Safety_Officer_Email", "", "รับแจ้งเตือนตอนมีรายการ 'รอตรวจสอบ'"],
   ["MGR_Email", "", "อีเมล MGR สำหรับ escalate Grade A/B ที่เลย/ใกล้กำหนด"],
   ["AGMGM_Email", "", "อีเมล AGM/GM สำหรับ escalate Grade A ที่เลย/ใกล้กำหนด"],

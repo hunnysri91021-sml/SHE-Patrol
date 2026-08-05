@@ -42,7 +42,7 @@
 | Dashboard | ทุกคน | กราฟ Grade / Category / อัตราปิดงานตรงเวลารายเดือน / พื้นที่ปัญหาซ้ำ |
 | รายงานผู้บริหาร | ทุกคน | รูปแบบ SES/F-PES เดิม พิมพ์เป็น PDF หรือ export CSV |
 | จัดการผู้ใช้งาน | เฉพาะ Safety Admin | เพิ่ม/แก้ไขผู้ใช้งาน — พิมพ์ชื่อ-อีเมลใครก็ได้ ไม่ต้องมีบัญชีมาก่อน กำหนด Role/Shop ให้แต่ละคน |
-| ตั้งค่า | เฉพาะ Safety Admin | แก้อีเมลแจ้งเตือน (Safety Officer/MGR/AGMGM/หัวหน้างานแต่ละ Shop), `SLA_Escalation_Days_Before`, `Frontend_Base_URL`, `MS365_Backup_Email`, **`TypeOfAudit_Options`** (รายการตัวเลือก dropdown "ประเภทการตรวจ" ในฟอร์มบันทึกรายการตรวจใหม่ คั่นด้วยจุลภาค) — บันทึกแล้วมีผลทันที ไม่ต้องเปิด Google Sheet ไปแก้แท็บ Settings เอง (เรียก action `listSettings`/`updateSettings` ใน `.gs`) |
+| ตั้งค่า | เฉพาะ Safety Admin | แก้อีเมลแจ้งเตือน (Safety Officer/MGR/AGMGM/หัวหน้างานแต่ละ Shop), `SLA_Escalation_Days_Before`, `Frontend_Base_URL`, `MS365_Backup_Email` และรายการตัวเลือก dropdown 3 ชุด — **`TypeOfAudit_Options`** (ประเภทการตรวจ), **`Shop_Options`** (หน่วยงาน/Shop), **`Category_Options`** (ประเภท/STD) แต่ละชุดคั่นด้วยจุลภาค — บันทึกแล้วมีผลทันทีกับทุกจุดที่ใช้ dropdown เหล่านี้ (ฟอร์มบันทึกรายการตรวจใหม่, ตัวกรองหน้าหลัก, ฟอร์มรายงาน, ฟอร์มจัดการผู้ใช้งาน) ไม่ต้องเปิด Google Sheet ไปแก้แท็บ Settings เอง (เรียก action `listSettings`/`updateSettings` ใน `.gs`) |
 
 การปิดงาน **บังคับแนบรูปหลังแก้ไขก่อน** — ปุ่มปิดงานจะเปลี่ยนสถานะไม่ได้จนกว่าจะมีรูป และระบบบันทึก
 ชื่อผู้ปิดงาน + เวลาอัตโนมัติจากบัญชีที่ login อยู่ (ไม่ต้องพิมพ์ชื่อเอง — กันการสวมรอย)
@@ -128,12 +128,24 @@ SMTP) ทันทีที่มีการเปลี่ยนแปลง�
 
 ## Google Sheet: แท็บ Findings (17 คอลัมน์)
 
-`Id` (auto) · `TypeOfAudit` (dropdown เลือกจากรายการ — ตัวเลือกกำหนดได้เองที่แท็บ "ตั้งค่า" คีย์
+`Id` (auto) · `TypeOfAudit` (dropdown — ตัวเลือกกำหนดเองได้ที่แท็บ "ตั้งค่า" คีย์
 `TypeOfAudit_Options`) · `PatrolDate` ·
-`Shop` (PDI/Acc/Yard/Washing/Touch up/Store/อื่นๆ) · `Place` ·
-`Description` · `Grade` (A/B/C/Others) · `Category` (F/S/EES/5S) · `PhotoBeforeUrl` · `DueDate` ·
+`Shop` (dropdown — ตัวเลือกกำหนดเองได้ที่คีย์ `Shop_Options` ค่าเริ่มต้น PDI/Acc/Yard/Washing/Touch
+up/Store/อื่นๆ) · `Place` · `Description` · `Grade` (A/B/C/Others — คงที่ ผูกกับ SLA/การ escalate
+ในโค้ด ไม่ใช่รายการที่แก้ผ่านตั้งค่าได้) · `Category` (dropdown — ตัวเลือกกำหนดเองได้ที่คีย์
+`Category_Options` ค่าเริ่มต้น F/S/EES/5S) · `PhotoBeforeUrl` · `DueDate` ·
 `RootCause` · `ActionResponsible` · `Countermeasure` · `PhotoAfterUrl` ·
 `Status` (เปิดใหม่/รอดำเนินการ/ดำเนินการแล้ว/รอตรวจสอบ/ปิดงาน) · `VerifiedBy` · `Rules_Confirmed_DateTime`
+
+> **`TypeOfAudit`/`Shop`/`Category` เป็น dropdown ที่ Admin แก้รายการตัวเลือกเองได้จากแท็บ "ตั้งค่า"**
+> (คั่นแต่ละตัวเลือกด้วยจุลภาค) มีผลทันทีกับทุกจุดที่ใช้ค่านั้น — ฟอร์มบันทึกรายการตรวจใหม่, ตัวกรอง
+> หน้าหลัก, ฟอร์มรายงาน, และฟอร์มจัดการผู้ใช้งาน (Shop ใช้กำหนดขอบเขตของ Dept-Responsible ด้วย)
+> **ข้อควรระวังสำหรับ Shop**: การเพิ่มชื่อ Shop ใหม่ใน `Shop_Options` ทำให้เลือกได้ในฟอร์มทันที แต่
+> อีเมลแจ้งเตือนเฉพาะหน่วยงาน (`Shop_Email_<ชื่อ>`) ต้องเพิ่มเป็นคีย์ Settings แยกต่างหากเอง (พิมพ์
+> เพิ่มแถวใน Google Sheet ตรงๆ) ไม่งั้นจะ fallback ไปใช้ `Shop_Email_อื่นๆ` แทน — ส่วน `Grade`
+> **ตั้งใจไม่ทำให้แก้ได้จากตั้งค่า** เพราะ A/B/C/Others ผูกกับจำนวนวัน SLA และสายการ escalate
+> (MGR/AGM) ตรงในโค้ด `.gs` ถ้าให้แก้ชื่อ/รายการได้อิสระจะเสี่ยงทำให้การแจ้งเตือนผู้บริหารเงียบไปโดย
+> ไม่รู้ตัว — ถ้าต้องการปรับส่วนนี้ควรคุยรายละเอียด SLA/escalate ใหม่ก่อน ไม่ใช่แค่แก้รายการตัวเลือก
 
 > `TypeOfAudit` เพิ่มเข้ามาทีหลัง (อยู่คอลัมน์ B ต่อจาก Id) — ถ้าเป็นชีตที่มีข้อมูลอยู่ก่อนแล้ว
 > `setupSheet()` จะแทรกคอลัมน์ว่างให้อัตโนมัติแบบไม่ทับข้อมูลเดิม (เช็คจาก header เดิมก่อนแทรก

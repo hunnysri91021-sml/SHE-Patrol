@@ -657,9 +657,11 @@ const SLA_ESCALATE = {
   "C": "หัวหน้างาน",
   "Others": "หัวหน้างาน",
 };
-const SHOP_OPTIONS = ["PDI", "Acc", "Yard", "Washing", "Touch up", "Store", "อื่นๆ"];
+// SHOP_OPTIONS/CATEGORY_OPTIONS เป็นค่าเริ่มต้นสำรอง (fallback) ก่อนโหลด Settings จริง — ค่าจริงที่ใช้
+// แสดงผลมาจาก Shop_Options/Category_Options ในแท็บ "ตั้งค่า" ผ่าน refreshDynamicOptions() ด้านล่าง
+let SHOP_OPTIONS = ["PDI", "Acc", "Yard", "Washing", "Touch up", "Store", "อื่นๆ"];
+let CATEGORY_OPTIONS = ["F", "S", "EES", "5S"];
 const GRADE_OPTIONS = ["A", "B", "C", "Others"];
-const CATEGORY_OPTIONS = ["F", "S", "EES", "5S"];
 const STATUS_OPTIONS = ["เปิดใหม่", "รอดำเนินการ", "ดำเนินการแล้ว", "รอตรวจสอบ", "ปิดงาน"];
 const STATUS_OPEN = ["เปิดใหม่", "รอดำเนินการ", "ดำเนินการแล้ว", "รอตรวจสอบ"];
 
@@ -971,10 +973,12 @@ const SheUsersAPI = (function () {
 
 const SheSettingsAPI = (function () {
   const DEMO_KEY = "she_patrol_demo_settings";
-  const DEMO_SEED_VERSION = "2026-08-settings-v2-typeofaudit";
+  const DEMO_SEED_VERSION = "2026-08-settings-v3-shop-category";
   const DEFAULT_SETTINGS = [
     { Key: "Frontend_Base_URL", Value: "", Description: "URL ของเว็บที่โฮสต์ index.html เช่น https://ชื่อบัญชี.github.io/SHE-Patrol/ — ใช้สร้าง deep link ในอีเมลแจ้งเตือน" },
     { Key: "TypeOfAudit_Options", Value: "Planned,Unplanned,Follow-up,Special", Description: "รายการตัวเลือก 'ประเภทการตรวจ' ในฟอร์มบันทึกรายการตรวจใหม่ — คั่นแต่ละตัวเลือกด้วยจุลภาค (,) แก้ไขแล้วมีผลทันที" },
+    { Key: "Shop_Options", Value: "PDI,Acc,Yard,Washing,Touch up,Store,อื่นๆ", Description: "รายการตัวเลือก 'หน่วยงาน/Shop' ในฟอร์ม/ตัวกรอง/จัดการผู้ใช้งาน — คั่นด้วยจุลภาค (,) — Shop ใหม่จะยังไม่มีอีเมลแจ้งเตือนเฉพาะจนกว่าจะเพิ่มคีย์ Shop_Email_<ชื่อ Shop> เอง" },
+    { Key: "Category_Options", Value: "F,S,EES,5S", Description: "รายการตัวเลือก 'ประเภท (STD)' ในฟอร์มบันทึกรายการตรวจใหม่ — คั่นด้วยจุลภาค (,) แก้ไขแล้วมีผลทันที" },
     { Key: "Safety_Officer_Email", Value: "", Description: "รับแจ้งเตือนตอนมีรายการสถานะ 'รอตรวจสอบ'" },
     { Key: "MGR_Email", Value: "", Description: "อีเมล MGR สำหรับ escalate Grade A/B ที่เลย/ใกล้กำหนด" },
     { Key: "AGMGM_Email", Value: "", Description: "อีเมล AGM/GM สำหรับ escalate Grade A ที่เลย/ใกล้กำหนด" },
@@ -1166,21 +1170,45 @@ document.getElementById("f_photoBefore").addEventListener("change", async e => {
   img.src = URL.createObjectURL(selectedPhotoBeforeFile);
   img.style.display = "block";
 });
-async function populateTypeOfAuditSelect() {
-  const sel = document.getElementById("f_typeOfAudit");
-  sel.innerHTML = '<option value="">-- เลือก --</option>';
+/* ======================================================================
+ * รายการตัวเลือก TypeOfAudit/Shop/Category — แก้ไขได้จากแท็บ "ตั้งค่า" แทนที่
+ * จะ hardcode ไว้ในโค้ด โหลดสดจาก Settings ทุกครั้งที่เปิดฟอร์ม/เปิดแอป กันเห็นค่าเก่าค้าง
+ * ====================================================================== */
+function parseOptionsSetting(raw, fallback) {
+  const list = (raw || "").split(",").map(s => s.trim()).filter(Boolean);
+  return list.length ? list : fallback;
+}
+function renderOptionSelect(id, options, placeholder) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>` +
+    options.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("");
+  if (options.includes(current)) sel.value = current;
+}
+async function refreshDynamicOptions() {
   try {
     const settings = await SheSettingsAPI.list();
-    const raw = settings.find(s => s.Key === "TypeOfAudit_Options")?.Value || "";
-    const options = raw.split(",").map(s => s.trim()).filter(Boolean);
-    options.forEach(opt => sel.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(opt)}">${escapeHtml(opt)}</option>`));
+    const byKey = {};
+    settings.forEach(s => { byKey[s.Key] = s.Value; });
+    SHOP_OPTIONS = parseOptionsSetting(byKey.Shop_Options, SHOP_OPTIONS);
+    CATEGORY_OPTIONS = parseOptionsSetting(byKey.Category_Options, CATEGORY_OPTIONS);
+    const typeOfAuditOptions = parseOptionsSetting(byKey.TypeOfAudit_Options, []);
+
+    renderOptionSelect("f_shop", SHOP_OPTIONS, "-- เลือก --");
+    renderOptionSelect("filterShop", SHOP_OPTIONS, "ทั้งหมด");
+    renderOptionSelect("u_shop", SHOP_OPTIONS, "-- เลือก --");
+    renderOptionSelect("f_category", CATEGORY_OPTIONS, "-- เลือก --");
+    renderOptionSelect("f_typeOfAudit", typeOfAuditOptions, "-- เลือก --");
+    const rptShopSel = document.getElementById("rptShop");
+    if (rptShopSel) { rptShopSel.dataset.filled = ""; rptShopSel.innerHTML = '<option value="">ทั้งหมด</option>'; fillSelectOnce("rptShop", SHOP_OPTIONS); }
   } catch (err) {
-    // เงียบไว้พอ — ยังใช้ "-- เลือก --" อย่างเดียวได้ ไม่บล็อกการสร้างรายการ
+    // เงียบไว้พอ — ยังใช้ค่า fallback/ค่าที่มีอยู่เดิมได้ ไม่บล็อกการทำงาน
   }
 }
 document.getElementById("newFindingBtn").addEventListener("click", async () => {
   if (!canCreate()) { alert("บทบาทปัจจุบันไม่มีสิทธิ์สร้างรายการใหม่ (เฉพาะผู้ตรวจ / Safety Admin)"); return; }
-  await populateTypeOfAuditSelect();
+  await refreshDynamicOptions();
   document.getElementById("f_typeOfAudit").value = "";
   document.getElementById("f_patrolDate").value = todayStr();
   document.getElementById("f_shop").value = "";
@@ -1584,7 +1612,8 @@ function toggleShopField() {
 }
 document.getElementById("u_role").addEventListener("change", toggleShopField);
 
-function openUserModal(u) {
+async function openUserModal(u) {
+  await refreshDynamicOptions();
   editingUserId = u ? u.Id : null;
   document.getElementById("userModalTitle").textContent = u ? "แก้ไขผู้ใช้งาน" : "เพิ่มผู้ใช้งาน";
   document.getElementById("u_name").value = u ? u.Name : "";
@@ -1668,6 +1697,7 @@ document.getElementById("saveSettingsBtn").addEventListener("click", async () =>
   btn.disabled = true; btn.textContent = "กำลังบันทึก...";
   try {
     await SheSettingsAPI.update(values);
+    await refreshDynamicOptions();
     alert("บันทึกการตั้งค่าเรียบร้อย");
   } catch (err) {
     alert("เกิดข้อผิดพลาด: " + err.message);
@@ -1796,6 +1826,7 @@ async function showApp() {
   document.getElementById("storageNote").textContent = SheAPI.LIVE
     ? "เชื่อมต่อ Google Sheets จริง — ข้อมูลนี้ share กับทุกคนที่ใช้ระบบ ไม่ว่าจะมีบัญชี Microsoft 365 หรือไม่"
     : "Demo Mode — ข้อมูลเก็บใน browser นี้เท่านั้น ยังไม่ share ข้ามเครื่อง จนกว่าจะเชื่อมต่อ Google Sheets จริง";
+  await refreshDynamicOptions();
   if (currentRole() === "dept" && u.Shop) document.getElementById("filterShop").value = u.Shop;
   try {
     await loadFindings();
