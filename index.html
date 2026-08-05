@@ -277,7 +277,7 @@
 <!-- ============== APP SHELL ============== -->
 <div id="appShell" style="display:none;">
   <div class="demo-flag no-print" id="demoFlag" style="display:none;">
-    ⚠️ Demo Mode — ข้อมูลเก็บใน browser นี้เท่านั้น ยังไม่เชื่อมต่อ SharePoint จริง
+    ⚠️ Demo Mode — ข้อมูลเก็บใน browser นี้เท่านั้น ยังไม่เชื่อมต่อ Google Sheets จริง
   </div>
 
   <header class="topbar no-print">
@@ -407,9 +407,9 @@
       </div>
       <div id="usersContainer"><div class="loading">กำลังโหลด...</div></div>
       <div class="info-banner" style="margin-top:16px;background:var(--gray-pale);color:var(--muted);">
-        📧 การแจ้งเตือนทางอีเมล (finding ใหม่ / รอตรวจสอบ / เลยกำหนด SLA / ปิดงาน) ทำงานอัตโนมัติผ่าน
-        Power Automate เมื่อเชื่อมต่อ SharePoint จริงแล้ว — ดูวิธีตั้งค่าที่โฟลเดอร์ <code>power-automate/</code>
-        ในซอร์สโค้ด ไม่ต้องกดส่งเองในหน้านี้
+        📧 การแจ้งเตือนทางอีเมล (finding ใหม่ / รอตรวจสอบ / เลยกำหนด SLA / ปิดงาน) ทำงานอัตโนมัติจาก
+        Google Apps Script เมื่อเชื่อมต่อจริงแล้ว (กรอกอีเมลในแท็บ Settings ของ Google Sheet) —
+        ดูไฟล์ <code>SHE-Patrol-AppsScript.gs</code> ในซอร์สโค้ด ไม่ต้องกดส่งเองในหน้านี้
       </div>
     </div>
 
@@ -529,16 +529,18 @@
 
 <script>
 const APP_CONFIG = {
-  // TODO: วาง URL ของ Power Automate Flow 5 (API Gateway, HTTP trigger) ที่นี่หลังสร้างแล้ว
-  // ดู power-automate/Flow5-API-Gateway.md — ต้องมีค่านี้ระบบถึงจะทำงานแบบ Live (ใช้งานได้ทั้งคนมี/ไม่มี M365)
+  // TODO: วาง URL ของ Google Apps Script Web App ที่นี่หลัง deploy แล้ว (ลงท้ายด้วย /exec)
+  // ดู SHE-Patrol-AppsScript.gs — ต้องมีค่านี้ระบบถึงจะทำงานแบบ Live (ใช้งานได้ทั้งคนมี/ไม่มี M365 ฟรี)
   API_URL: "",
 };
 const LIVE = !!APP_CONFIG.API_URL;
 
 async function apiCall(action, payload = {}) {
+  // Content-Type: text/plain (ไม่ใช่ application/json) กัน browser ยิง CORS preflight (OPTIONS)
+  // ซึ่ง Google Apps Script Web App ไม่รองรับ — ฝั่ง doPost() ยัง parse เนื้อหาเป็น JSON ตามปกติ
   const res = await fetch(APP_CONFIG.API_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify({ action, ...payload }),
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
@@ -776,7 +778,7 @@ const SheAPI = (function () {
     });
   }
 
-  /* ---- Live backend (via Power Automate API Gateway — Flow 5) ------ */
+  /* ---- Live backend (via Google Apps Script Web App) ---------------- */
 
   async function liveList() { return apiCall("listFindings"); }
   async function liveGet(id) { return apiCall("getFinding", { id: Number(id) }); }
@@ -786,10 +788,6 @@ const SheAPI = (function () {
     const contentBase64 = await fileToBase64(file);
     const data = await apiCall("uploadPhoto", { findingId: Number(findingId), stage, fileName: file.name, contentBase64 });
     return data.fileUrl;
-  }
-  async function liveResolvePhotoUrl(url) {
-    const data = await apiCall("getPhoto", { fileUrl: url });
-    return `data:${data.contentType};base64,${data.contentBase64}`;
   }
 
   /* ---- public interface --------------------------------------------- */
@@ -802,9 +800,9 @@ const SheAPI = (function () {
     async update(id, fields) { return LIVE ? liveUpdate(id, fields) : demoUpdate(id, fields); },
     async uploadPhoto(file, findingId, stage) { return LIVE ? liveUploadPhoto(file, findingId, stage) : demoUploadPhoto(file, findingId, stage); },
     async resolvePhotoUrl(url) {
-      if (!url) return "";
-      if (!LIVE || url.startsWith("data:")) return url;
-      return liveResolvePhotoUrl(url);
+      // Demo mode stores data: URLs directly; Google Drive photos get a public
+      // ANYONE_WITH_LINK view URL from uploadPhoto — both are directly <img>-loadable.
+      return url || "";
     },
   };
 })()
@@ -1483,8 +1481,8 @@ async function showApp() {
   if (canManageUsers()) document.getElementById("adminTabBtn").style.display = "";
   if (!SheAPI.LIVE) document.getElementById("demoFlag").style.display = "block";
   document.getElementById("storageNote").textContent = SheAPI.LIVE
-    ? "เชื่อมต่อ SharePoint List จริง — ข้อมูลนี้ share กับทุกคนที่ใช้ระบบ"
-    : "Demo Mode — ข้อมูลเก็บใน browser นี้เท่านั้น ยังไม่ share ข้ามเครื่อง จนกว่าจะเชื่อมต่อ SharePoint จริง";
+    ? "เชื่อมต่อ Google Sheets จริง — ข้อมูลนี้ share กับทุกคนที่ใช้ระบบ ไม่ว่าจะมีบัญชี Microsoft 365 หรือไม่"
+    : "Demo Mode — ข้อมูลเก็บใน browser นี้เท่านั้น ยังไม่ share ข้ามเครื่อง จนกว่าจะเชื่อมต่อ Google Sheets จริง";
   if (currentRole() === "dept" && u.Shop) document.getElementById("filterShop").value = u.Shop;
   await loadFindings();
   renderList();

@@ -1,4 +1,14 @@
 <#
+.NOTE
+    SUPERSEDED as the app's live backend: index.html now talks to
+    SHE-Patrol-AppsScript.gs (Google Sheets) instead, because the Power Automate
+    HTTP-trigger gateway needed to let non-M365-licensed staff use the app
+    requires a paid per-user Power Automate plan, which isn't included in the
+    M365 Business Basic license SML is on. This script and the provisioned
+    SharePoint List/Library/Groups still exist on the tenant and remain here for
+    reference / possible future use. See README.md "สถาปัตยกรรม" for the current
+    architecture.
+
 .SYNOPSIS
     Provisions the SHE Patrol Digital System on a SharePoint Online site:
     - List: SHE_Patrol_Findings (16 columns)

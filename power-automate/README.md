@@ -1,6 +1,14 @@
 # Power Automate — SHE Patrol (5 flows, standard connectors only)
 
-ทุก flow ในโฟลเดอร์นี้ใช้เฉพาะ connector มาตรฐาน (ไม่มี premium):
+> ⚠️ **โฟลเดอร์นี้ถูกแทนที่ด้วย `SHE-Patrol-AppsScript.gs` แล้ว** — Flow 5 (API Gateway) ต้องใช้
+> Power Automate license แบบ per-user ที่มีค่าใช้จ่าย ไม่รวมอยู่ใน M365 Business Basic ที่ SML ใช้อยู่
+> จึงย้าย backend ไปที่ Google Apps Script Web App แทน (ฟรี ทำหน้าที่เดียวกันทุกอย่าง) ดูรายละเอียด
+> ที่ README หลักของรีโป หัวข้อ "สถาปัตยกรรม" — ไฟล์ในโฟลเดอร์นี้ยังเก็บไว้เผื่อ SML ตัดสินใจซื้อ
+> license เพิ่มหรืออยากกลับมาใช้ SharePoint เป็น backend ในอนาคต
+
+ทุก flow ในโฟลเดอร์นี้ใช้เฉพาะ connector มาตรฐาน (ไม่มี premium) **ยกเว้น Flow 5 ที่ trigger
+"When a HTTP request is received" ถูกจัดเป็นฟีเจอร์ premium ของ Power Automate เอง (คนละเงื่อนไข
+จาก "premium connector" ที่ SML ห้าม — เป็นเรื่อง license ของตัว trigger)**:
 
 - **SharePoint** (built-in, standard) — trigger + get/update items + "Send an HTTP request to SharePoint"
 - **Office 365 Outlook** (standard) — Send an email (V2)

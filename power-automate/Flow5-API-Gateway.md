@@ -1,7 +1,11 @@
 # Flow 5 — API Gateway (ทำให้ใช้งานได้แม้ไม่มีบัญชี Microsoft 365)
 
+> ⚠️ **แทนที่ด้วย `SHE-Patrol-AppsScript.gs` แล้ว** — trigger "When a HTTP request is received"
+> ที่ flow นี้ต้องใช้ถูกจัดเป็นฟีเจอร์ premium ของ Power Automate (ไม่รวมใน M365 Business Basic)
+> เก็บไฟล์นี้ไว้เป็นข้อมูลอ้างอิงเผื่อ SML มี license ที่รองรับในอนาคต
+
 Connector: SharePoint (standard, "Send an HTTP request to SharePoint" + "Get items"/"Get item") +
-Request/Response (built-in trigger, ไม่ใช่ premium). ไม่มี premium connector
+Request/Response (**premium trigger** — ดูคำเตือนด้านบน)
 
 ## ทำไมต้องมี flow นี้
 
