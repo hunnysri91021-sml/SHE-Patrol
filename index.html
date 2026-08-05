@@ -675,6 +675,7 @@ const SLA_ESCALATE = {
 // แสดงผลมาจาก Shop_Options/Category_Options ในแท็บ "ตั้งค่า" ผ่าน refreshDynamicOptions() ด้านล่าง
 let SHOP_OPTIONS = ["PDI", "Acc", "Yard", "Washing", "Touch up", "Store", "อื่นๆ"];
 let CATEGORY_OPTIONS = ["F", "S", "EES", "5S"];
+let TYPE_OF_AUDIT_OPTIONS = [];
 const GRADE_OPTIONS = ["A", "B", "C", "Others"];
 const STATUS_OPTIONS = ["เปิดใหม่", "รอดำเนินการ", "ดำเนินการแล้ว", "รอตรวจสอบ", "ปิดงาน"];
 const STATUS_OPEN = ["เปิดใหม่", "รอดำเนินการ", "ดำเนินการแล้ว", "รอตรวจสอบ"];
@@ -1049,10 +1050,11 @@ function currentRole() { const u = getCurrentUser(); return u ? roleShortCode(u.
 function canCreate() { return ["auditor", "admin"].includes(currentRole()); }
 function canEditProgress(f) {
   const r = currentRole();
-  if (r === "admin") return true;
+  if (r === "admin" || r === "auditor") return true;
   if (r === "dept") { const u = getCurrentUser(); return !!(u && u.Shop && u.Shop === f.Shop); }
   return false;
 }
+function canEditDetails() { return currentRole() === "admin"; }
 function canClose() { return currentRole() === "admin"; }
 function canManageUsers() { return currentRole() === "admin"; }
 
@@ -1207,13 +1209,13 @@ async function refreshDynamicOptions() {
     settings.forEach(s => { byKey[s.Key] = s.Value; });
     SHOP_OPTIONS = parseOptionsSetting(byKey.Shop_Options, SHOP_OPTIONS);
     CATEGORY_OPTIONS = parseOptionsSetting(byKey.Category_Options, CATEGORY_OPTIONS);
-    const typeOfAuditOptions = parseOptionsSetting(byKey.TypeOfAudit_Options, []);
+    TYPE_OF_AUDIT_OPTIONS = parseOptionsSetting(byKey.TypeOfAudit_Options, []);
 
     renderOptionSelect("f_shop", SHOP_OPTIONS, "-- เลือก --");
     renderOptionSelect("filterShop", SHOP_OPTIONS, "ทั้งหมด");
     renderOptionSelect("u_shop", SHOP_OPTIONS, "-- เลือก --");
     renderOptionSelect("f_category", CATEGORY_OPTIONS, "-- เลือก --");
-    renderOptionSelect("f_typeOfAudit", typeOfAuditOptions, "-- เลือก --");
+    renderOptionSelect("f_typeOfAudit", TYPE_OF_AUDIT_OPTIONS, "-- เลือก --");
     const rptShopSel = document.getElementById("rptShop");
     if (rptShopSel) { rptShopSel.dataset.filled = ""; rptShopSel.innerHTML = '<option value="">ทั้งหมด</option>'; fillSelectOnce("rptShop", SHOP_OPTIONS); }
   } catch (err) {
@@ -1277,6 +1279,7 @@ async function openDetail(id) {
   const body = document.getElementById("detailBody");
   const foot = document.getElementById("detailFoot");
   const editable = canEditProgress(f);
+  const editableDetails = canEditDetails();
   const overdue = isOverdueRow(f);
   body.innerHTML = `<div class="loading">กำลังโหลดรูปภาพ...</div>`;
   const [beforeSrc, afterSrc] = await Promise.all([
@@ -1286,18 +1289,39 @@ async function openDetail(id) {
 
   body.innerHTML = `
     <div class="detail-row"><div class="k">รหัส Finding</div><div class="v">${findingCode(f)}</div></div>
-    <div class="detail-row"><div class="k">ประเภทการตรวจ</div><div class="v">${escapeHtml(f.TypeOfAudit) || "-"}</div></div>
-    <div class="detail-row"><div class="k">วันที่ตรวจ</div><div class="v">${fmtDate(f.PatrolDate)}</div></div>
-    <div class="detail-row"><div class="k">หน่วยงาน</div><div class="v">${f.Shop}</div></div>
-    <div class="detail-row"><div class="k">Grade / ประเภท</div><div class="v"><span class="badge grade-${f.Grade}" style="display:inline-block">${f.Grade}</span> &nbsp;${f.Category || "-"}</div></div>
-    <div class="detail-row"><div class="k">รายละเอียดที่พบ</div><div class="v">${escapeHtml(f.Description)}</div></div>
+    ${editableDetails ? `
+      <div class="section-title">ข้อมูลรายการ (Admin แก้ไขได้)</div>
+      <div class="grid2">
+        <div class="field"><label>ประเภทการตรวจ</label><select id="d_typeOfAudit"></select></div>
+        <div class="field"><label>วันที่ตรวจ</label><input type="date" id="d_patrolDate" value="${f.PatrolDate}"></div>
+        <div class="field"><label>หน่วยงาน/Shop</label><select id="d_shop"></select></div>
+        <div class="field full"><label>จุดที่พบ</label><input type="text" id="d_place" value="${escapeHtml(f.Place)}"></div>
+        <div class="field full"><label>รายละเอียดที่พบ</label><textarea id="d_description" rows="3">${escapeHtml(f.Description)}</textarea></div>
+        <div class="field"><label>Grade</label>
+          <select id="d_grade">
+            <option value="A">A — เสี่ยงสูง</option>
+            <option value="B">B — เสี่ยงปานกลาง</option>
+            <option value="C">C — เสี่ยงต่ำ</option>
+            <option value="Others">Others — ข้อสังเกต/5S</option>
+          </select>
+          <div class="sla-hint">เปลี่ยน Grade จะไม่ปรับกำหนดปิดงาน (${fmtDate(f.DueDate)}) ให้อัตโนมัติ</div>
+        </div>
+        <div class="field"><label>ประเภท (STD)</label><select id="d_category"></select></div>
+      </div>
+    ` : `
+      <div class="detail-row"><div class="k">ประเภทการตรวจ</div><div class="v">${escapeHtml(f.TypeOfAudit) || "-"}</div></div>
+      <div class="detail-row"><div class="k">วันที่ตรวจ</div><div class="v">${fmtDate(f.PatrolDate)}</div></div>
+      <div class="detail-row"><div class="k">หน่วยงาน</div><div class="v">${f.Shop}</div></div>
+      <div class="detail-row"><div class="k">Grade / ประเภท</div><div class="v"><span class="badge grade-${f.Grade}" style="display:inline-block">${f.Grade}</span> &nbsp;${f.Category || "-"}</div></div>
+      <div class="detail-row"><div class="k">รายละเอียดที่พบ</div><div class="v">${escapeHtml(f.Description)}</div></div>
+    `}
     <div class="detail-row"><div class="k">กำหนดปิดงาน</div><div class="v">${fmtDate(f.DueDate)} ${overdue ? '<span class="overdue-tag">เลยกำหนด</span>' : ""}</div></div>
     <div class="detail-row"><div class="k">สถานะ</div><div class="v"><span class="badge st-${f.Status}">${f.Status}</span></div></div>
     <div class="detail-row"><div class="k">รูปสภาพที่พบ</div><div class="v">
       ${beforeSrc ? `<img src="${beforeSrc}" style="max-width:100%;max-height:200px;border-radius:6px;">` : '<span style="color:var(--muted)">ไม่มีรูป</span>'}
     </div></div>
 
-    <div class="section-title">การแก้ไข (หน่วยงานรับผิดชอบ)</div>
+    <div class="section-title">การแก้ไข / ความคืบหน้า</div>
     ${editable ? `
       <div class="field full"><label>สาเหตุ (Root cause)</label><textarea id="d_rootCause" rows="2">${escapeHtml(f.RootCause)}</textarea></div>
       <div class="field full"><label>ผู้รับผิดชอบดำเนินการ</label><input type="text" id="d_actionResponsible" value="${escapeHtml(f.ActionResponsible)}"></div>
@@ -1324,6 +1348,16 @@ async function openDetail(id) {
     ` : ""}
   `;
 
+  if (editableDetails) {
+    renderOptionSelect("d_typeOfAudit", TYPE_OF_AUDIT_OPTIONS, "-- เลือก --");
+    document.getElementById("d_typeOfAudit").value = f.TypeOfAudit || "";
+    renderOptionSelect("d_shop", SHOP_OPTIONS, "-- เลือก --");
+    document.getElementById("d_shop").value = f.Shop || "";
+    renderOptionSelect("d_category", CATEGORY_OPTIONS, "-- เลือก --");
+    document.getElementById("d_category").value = f.Category || "";
+    document.getElementById("d_grade").value = f.Grade || "";
+  }
+
   if (editable) {
     document.getElementById("d_photoAfter").addEventListener("change", async e => {
       const file = e.target.files[0];
@@ -1336,6 +1370,7 @@ async function openDetail(id) {
   }
 
   let footHtml = "";
+  if (editableDetails) footHtml += `<button class="btn btn-ghost" id="saveDetailsBtn">บันทึกข้อมูลรายการ</button>`;
   if (editable) footHtml += `<button class="btn btn-ghost" id="saveProgressBtn">บันทึกความคืบหน้า</button>`;
   if (editable && f.Status !== "ปิดงาน") {
     const nextOptions = STATUS_OPTIONS.filter(s => s !== "ปิดงาน" || canClose());
@@ -1346,10 +1381,45 @@ async function openDetail(id) {
   }
   foot.innerHTML = footHtml || `<span style="color:var(--muted);font-size:13px;">โหมดดูอย่างเดียว (Read only)</span>`;
 
+  if (document.getElementById("saveDetailsBtn")) document.getElementById("saveDetailsBtn").addEventListener("click", () => saveDetails(f.Id));
   if (document.getElementById("saveProgressBtn")) document.getElementById("saveProgressBtn").addEventListener("click", () => saveProgress(f.Id));
   if (document.getElementById("applyStatusBtn")) document.getElementById("applyStatusBtn").addEventListener("click", () => applyStatusChange(f.Id));
 
   openModal("detailModalBackdrop");
+}
+
+async function saveDetails(id) {
+  const f = findings.find(x => String(x.Id) === String(id));
+  if (!f) return;
+  const typeOfAudit = document.getElementById("d_typeOfAudit").value.trim();
+  const patrolDate = document.getElementById("d_patrolDate").value;
+  const shop = document.getElementById("d_shop").value;
+  const place = document.getElementById("d_place").value.trim();
+  const description = document.getElementById("d_description").value.trim();
+  const grade = document.getElementById("d_grade").value;
+  const category = document.getElementById("d_category").value;
+  if (!patrolDate || !shop || !place || !description || !grade) {
+    alert("กรอกข้อมูลให้ครบ (วันที่ตรวจ, Shop, จุดที่พบ, รายละเอียด, Grade)");
+    return;
+  }
+  const btn = document.getElementById("saveDetailsBtn");
+  btn.disabled = true; btn.textContent = "กำลังบันทึก...";
+  try {
+    await SheAPI.update(f.Id, {
+      TypeOfAudit: typeOfAudit, PatrolDate: patrolDate, Shop: shop, Place: place,
+      Description: description, Grade: grade, Category: category,
+    });
+    await loadFindings();
+    renderList();
+    openDetail(id);
+  } catch (err) {
+    alert("เกิดข้อผิดพลาด: " + err.message);
+  } finally {
+    if (document.getElementById("saveDetailsBtn")) {
+      document.getElementById("saveDetailsBtn").disabled = false;
+      document.getElementById("saveDetailsBtn").textContent = "บันทึกข้อมูลรายการ";
+    }
+  }
 }
 
 async function saveProgress(id) {
