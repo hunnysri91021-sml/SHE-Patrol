@@ -1181,10 +1181,16 @@ document.getElementById("f_grade").addEventListener("change", e => {
 document.getElementById("f_photoBefore").addEventListener("change", async e => {
   const file = e.target.files[0];
   if (!file) return;
-  selectedPhotoBeforeFile = await compressImage(file);
-  const img = document.getElementById("f_photoBeforePreview");
-  img.src = URL.createObjectURL(selectedPhotoBeforeFile);
-  img.style.display = "block";
+  try {
+    selectedPhotoBeforeFile = await compressImage(file);
+    const img = document.getElementById("f_photoBeforePreview");
+    img.src = URL.createObjectURL(selectedPhotoBeforeFile);
+    img.style.display = "block";
+  } catch (err) {
+    selectedPhotoBeforeFile = null;
+    e.target.value = "";
+    alert("แนบรูปนี้ไม่ได้ — ไฟล์อาจเสียหายหรือเป็นฟอร์แมตที่เบราว์เซอร์ไม่รองรับ (เช่น HEIC บางรุ่น) ลองถ่ายรูปใหม่หรือเลือกไฟล์ JPG/PNG แทน");
+  }
 });
 /* ======================================================================
  * รายการตัวเลือก TypeOfAudit/Shop/Category — แก้ไขได้จากแท็บ "ตั้งค่า" แทนที่
@@ -1362,10 +1368,16 @@ async function openDetail(id) {
     document.getElementById("d_photoAfter").addEventListener("change", async e => {
       const file = e.target.files[0];
       if (!file) return;
-      pendingPhotoAfterFile = await compressImage(file);
-      const img = document.getElementById("d_photoAfterPreview");
-      img.src = URL.createObjectURL(pendingPhotoAfterFile);
-      img.style.display = "block";
+      try {
+        pendingPhotoAfterFile = await compressImage(file);
+        const img = document.getElementById("d_photoAfterPreview");
+        img.src = URL.createObjectURL(pendingPhotoAfterFile);
+        img.style.display = "block";
+      } catch (err) {
+        pendingPhotoAfterFile = null;
+        e.target.value = "";
+        alert("แนบรูปนี้ไม่ได้ — ไฟล์อาจเสียหายหรือเป็นฟอร์แมตที่เบราว์เซอร์ไม่รองรับ (เช่น HEIC บางรุ่น) ลองถ่ายรูปใหม่หรือเลือกไฟล์ JPG/PNG แทน");
+      }
     });
   }
 
