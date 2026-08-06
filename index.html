@@ -666,7 +666,9 @@ function fileToBase64(file) {
   });
 }
 
-const SLA_DAYS = { "A": 7, "B": 14, "C": 30, "Others": 30 };
+// ค่าเริ่มต้นสำรอง (fallback) ก่อนโหลด Settings จริง — ค่าจริงที่ใช้แสดงผลมาจาก
+// SLA_Days_A/B/C/Others ในแท็บ "ตั้งค่า" ผ่าน refreshDynamicOptions() ด้านล่าง
+let SLA_DAYS = { "A": 7, "B": 14, "C": 30, "Others": 30 };
 const SLA_ESCALATE = {
   "A": "MGR + AGM/GM ทันทีเมื่อเลยกำหนด",
   "B": "MGR",
@@ -990,12 +992,16 @@ const SheUsersAPI = (function () {
 
 const SheSettingsAPI = (function () {
   const DEMO_KEY = "she_patrol_demo_settings";
-  const DEMO_SEED_VERSION = "2026-08-settings-v3-shop-category";
+  const DEMO_SEED_VERSION = "2026-08-settings-v4-sla-days";
   const DEFAULT_SETTINGS = [
     { Key: "Frontend_Base_URL", Value: "", Description: "URL ของเว็บที่โฮสต์ index.html เช่น https://ชื่อบัญชี.github.io/SHE-Patrol/ — ใช้สร้าง deep link ในอีเมลแจ้งเตือน" },
     { Key: "TypeOfAudit_Options", Value: "Planned,Unplanned,Follow-up,Special", Description: "รายการตัวเลือก 'ประเภทการตรวจ' ในฟอร์มบันทึกรายการตรวจใหม่ — คั่นแต่ละตัวเลือกด้วยจุลภาค (,) แก้ไขแล้วมีผลทันที" },
     { Key: "Shop_Options", Value: "PDI,Acc,Yard,Washing,Touch up,Store,อื่นๆ", Description: "รายการตัวเลือก 'หน่วยงาน/Shop' ในฟอร์ม/ตัวกรอง/จัดการผู้ใช้งาน — คั่นด้วยจุลภาค (,) — Shop ใหม่จะยังไม่มีอีเมลแจ้งเตือนเฉพาะจนกว่าจะเพิ่มคีย์ Shop_Email_<ชื่อ Shop> เอง" },
     { Key: "Category_Options", Value: "F,S,EES,5S", Description: "รายการตัวเลือก 'ประเภท (STD)' ในฟอร์มบันทึกรายการตรวจใหม่ — คั่นด้วยจุลภาค (,) แก้ไขแล้วมีผลทันที" },
+    { Key: "SLA_Days_A", Value: "7", Description: "จำนวนวันจนถึงกำหนดปิดงาน (Due Date) สำหรับ Grade A — คำนวณอัตโนมัติตอนสร้างรายการตรวจใหม่ (วันที่ตรวจ + จำนวนวันนี้) แก้ไขแล้วมีผลกับรายการที่สร้างใหม่เท่านั้น ไม่ย้อนแก้รายการเก่า" },
+    { Key: "SLA_Days_B", Value: "14", Description: "จำนวนวันจนถึงกำหนดปิดงานสำหรับ Grade B" },
+    { Key: "SLA_Days_C", Value: "30", Description: "จำนวนวันจนถึงกำหนดปิดงานสำหรับ Grade C" },
+    { Key: "SLA_Days_Others", Value: "30", Description: "จำนวนวันจนถึงกำหนดปิดงานสำหรับ Grade Others" },
     { Key: "Safety_Officer_Email", Value: "", Description: "รับแจ้งเตือนตอนมีรายการสถานะ 'รอตรวจสอบ'" },
     { Key: "MGR_Email", Value: "", Description: "อีเมล MGR สำหรับ escalate Grade A/B ที่เลย/ใกล้กำหนด" },
     { Key: "AGMGM_Email", Value: "", Description: "อีเมล AGM/GM สำหรับ escalate Grade A ที่เลย/ใกล้กำหนด" },
@@ -1233,6 +1239,10 @@ async function refreshDynamicOptions(force) {
     SHOP_OPTIONS = parseOptionsSetting(byKey.Shop_Options, SHOP_OPTIONS);
     CATEGORY_OPTIONS = parseOptionsSetting(byKey.Category_Options, CATEGORY_OPTIONS);
     TYPE_OF_AUDIT_OPTIONS = parseOptionsSetting(byKey.TypeOfAudit_Options, []);
+    GRADE_OPTIONS.forEach(g => {
+      const n = Number(byKey["SLA_Days_" + g]);
+      if (n > 0) SLA_DAYS[g] = n;
+    });
 
     renderOptionSelect("f_shop", SHOP_OPTIONS, "-- เลือก --");
     renderOptionSelect("filterShop", SHOP_OPTIONS, "ทั้งหมด");

@@ -60,7 +60,6 @@ const FINDINGS_HEADERS = [
 ];
 const USERS_HEADERS = ["Id", "Name", "Email", "Role", "Shop", "Active", "Password"];
 
-const SLA_DAYS = { A: 7, B: 14, C: 30, Others: 30 };
 const STATUS_OPEN = ["เปิดใหม่", "รอดำเนินการ", "ดำเนินการแล้ว", "รอตรวจสอบ"];
 
 const DEFAULT_SETTINGS = [
@@ -69,6 +68,10 @@ const DEFAULT_SETTINGS = [
   ["TypeOfAudit_Options", "Planned,Unplanned,Follow-up,Special", "รายการตัวเลือก 'ประเภทการตรวจ' ในฟอร์มบันทึกรายการตรวจใหม่ — คั่นแต่ละตัวเลือกด้วยจุลภาค (,) แก้ไขแล้วมีผลทันที"],
   ["Shop_Options", "PDI,Acc,Yard,Washing,Touch up,Store,อื่นๆ", "รายการตัวเลือก 'หน่วยงาน/Shop' ในฟอร์ม/ตัวกรอง/จัดการผู้ใช้งาน — คั่นด้วยจุลภาค (,) — หมายเหตุ: ชื่อ Shop ที่เพิ่มใหม่จะยังไม่มีอีเมลแจ้งเตือนเฉพาะจนกว่าจะเพิ่มคีย์ Shop_Email_<ชื่อ Shop> เอง ไม่งั้นจะ fallback ไปที่ Shop_Email_อื่นๆ"],
   ["Category_Options", "F,S,EES,5S", "รายการตัวเลือก 'ประเภท (STD)' ในฟอร์มบันทึกรายการตรวจใหม่ — คั่นด้วยจุลภาค (,) แก้ไขแล้วมีผลทันที"],
+  ["SLA_Days_A", "7", "จำนวนวันจนถึงกำหนดปิดงาน (Due Date) สำหรับ Grade A — คำนวณอัตโนมัติตอนสร้างรายการตรวจใหม่ (วันที่ตรวจ + จำนวนวันนี้) แก้ไขแล้วมีผลกับรายการที่สร้างใหม่เท่านั้น ไม่ย้อนแก้รายการเก่า"],
+  ["SLA_Days_B", "14", "จำนวนวันจนถึงกำหนดปิดงานสำหรับ Grade B"],
+  ["SLA_Days_C", "30", "จำนวนวันจนถึงกำหนดปิดงานสำหรับ Grade C"],
+  ["SLA_Days_Others", "30", "จำนวนวันจนถึงกำหนดปิดงานสำหรับ Grade Others"],
   ["Safety_Officer_Email", "", "รับแจ้งเตือนตอนมีรายการ 'รอตรวจสอบ'"],
   ["MGR_Email", "", "อีเมล MGR สำหรับ escalate Grade A/B ที่เลย/ใกล้กำหนด"],
   ["AGMGM_Email", "", "อีเมล AGM/GM สำหรับ escalate Grade A ที่เลย/ใกล้กำหนด"],
