@@ -252,8 +252,8 @@ function doPost(e) {
     switch (data.action) {
       case "listFindings": return jsonResponse({ ok: true, data: listFindings_() });
       case "getFinding": return jsonResponse({ ok: true, data: getFinding_(data.id) });
-      case "createFinding": return jsonResponse({ ok: true, data: createFinding_(data.fields || {}) });
-      case "updateFinding": return jsonResponse({ ok: true, data: updateFinding_(data.id, data.fields || {}) });
+      case "createFinding": return jsonResponse({ ok: true, data: createFinding_(data.fields || {}, data.photo) });
+      case "updateFinding": return jsonResponse({ ok: true, data: updateFinding_(data.id, data.fields || {}, data.photos) });
       case "listUsers": return jsonResponse({ ok: true, data: listUsers_() });
       case "createUser": return jsonResponse({ ok: true, data: createUser_(data.fields || {}) });
       case "updateUser": return jsonResponse({ ok: true, data: updateUser_(data.id, data.fields || {}) });
@@ -330,7 +330,12 @@ function getFinding_(id) {
   return row;
 }
 
-function createFinding_(fields) {
+function createFinding_(fields, photo) {
+  // อัปโหลดรูปก่อนเข้า lock (ถ้ามี) — รวมสร้างรายการ + แนบรูปเป็นคำขอเดียว แทนที่จะ
+  // สร้างก่อนแล้วค่อยยิงอีกรอบเพื่อแนบรูป (ลด round-trip ไป Apps Script จาก 3 ครั้งเหลือ 1)
+  if (photo && photo.contentBase64) {
+    fields = Object.assign({}, fields, { PhotoBeforeUrl: uploadPhotoFile_("ก่อนแก้ไข", photo.fileName, photo.contentBase64) });
+  }
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   let record;
@@ -350,7 +355,17 @@ function createFinding_(fields) {
   return record;
 }
 
-function updateFinding_(id, fields) {
+function updateFinding_(id, fields, photos) {
+  // เช่นเดียวกับ createFinding_ — อัปโหลดรูปก่อนเข้า lock แล้วรวมเป็นคำขอเดียว
+  if (photos && (photos.before || photos.after)) {
+    fields = Object.assign({}, fields);
+    if (photos.before && photos.before.contentBase64) {
+      fields.PhotoBeforeUrl = uploadPhotoFile_("ก่อนแก้ไข", photos.before.fileName, photos.before.contentBase64);
+    }
+    if (photos.after && photos.after.contentBase64) {
+      fields.PhotoAfterUrl = uploadPhotoFile_("หลังแก้ไข", photos.after.fileName, photos.after.contentBase64);
+    }
+  }
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   let before, after;
@@ -437,13 +452,19 @@ function updateUser_(id, fields) {
 // รูปภาพ — เก็บใน Google Drive ตั้งค่าดูได้ตรงจากลิงก์เลย (ไม่ต้องมี auth)
 // ---------------------------------------------------------------
 function uploadPhoto_(findingId, stage, fileName, contentBase64) {
+  return { fileUrl: uploadPhotoFile_(stage, fileName, contentBase64) };
+}
+
+// ใช้ร่วมกันทั้ง action "uploadPhoto" เดี่ยวๆ (แนบรูปเพิ่มทีหลัง) และตอน
+// createFinding_/updateFinding_ แนบรูปมาพร้อมคำขอเดียวกันเลย
+function uploadPhotoFile_(stage, fileName, contentBase64) {
   const bytes = Utilities.base64Decode(contentBase64);
-  const safeName = `${findingId}_${stage === "ก่อนแก้ไข" ? "before" : "after"}_${new Date().getTime()}.jpg`;
+  const safeName = `${stage === "ก่อนแก้ไข" ? "before" : "after"}_${new Date().getTime()}.jpg`;
   const blob = Utilities.newBlob(bytes, "image/jpeg", safeName);
   const folder = getOrCreateFolder_(PHOTOS_FOLDER_NAME);
   const file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  return { fileUrl: `https://drive.google.com/uc?export=view&id=${file.getId()}` };
+  return `https://drive.google.com/uc?export=view&id=${file.getId()}`;
 }
 
 function getOrCreateFolder_(name) {

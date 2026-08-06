@@ -895,8 +895,8 @@ const SheAPI = (function () {
 
   async function liveList() { return apiCall("listFindings"); }
   async function liveGet(id) { return apiCall("getFinding", { id: Number(id) }); }
-  async function liveCreate(fields) { return apiCall("createFinding", { fields }); }
-  async function liveUpdate(id, fields) { return apiCall("updateFinding", { id: Number(id), fields }); }
+  async function liveCreate(fields, photo) { return apiCall("createFinding", { fields, photo }); }
+  async function liveUpdate(id, fields, photos) { return apiCall("updateFinding", { id: Number(id), fields, photos }); }
   async function liveUploadPhoto(file, findingId, stage) {
     const contentBase64 = await fileToBase64(file);
     const data = await apiCall("uploadPhoto", { findingId: Number(findingId), stage, fileName: file.name, contentBase64 });
@@ -904,13 +904,38 @@ const SheAPI = (function () {
   }
 
   /* ---- public interface --------------------------------------------- */
+  // create/update รับไฟล์รูปเป็นพารามิเตอร์เสริมได้เลย — รวมสร้าง/แก้ไขรายการ + แนบรูป
+  // เป็นคำขอเดียวไป Apps Script แทนที่จะแยกยิง uploadPhoto ก่อนแล้วค่อย create/update อีกที
+  // (ลด round-trip ที่ทำให้ "หน้าบันทึก" รู้สึกช้าเวลามีรูปแนบ ซึ่งเป็นเคสปกติทุกครั้ง)
 
   return {
     LIVE,
     async list() { return LIVE ? liveList() : demoList(); },
     async get(id) { return LIVE ? liveGet(id) : demoGet(id); },
-    async create(fields) { return LIVE ? liveCreate(fields) : demoCreate(fields); },
-    async update(id, fields) { return LIVE ? liveUpdate(id, fields) : demoUpdate(id, fields); },
+    async create(fields, photoFile) {
+      if (!photoFile) return LIVE ? liveCreate(fields) : demoCreate(fields);
+      if (LIVE) {
+        const contentBase64 = await fileToBase64(photoFile);
+        return liveCreate(fields, { fileName: photoFile.name, contentBase64 });
+      }
+      const dataUrl = await demoUploadPhoto(photoFile);
+      return demoCreate({ ...fields, PhotoBeforeUrl: dataUrl });
+    },
+    async update(id, fields, photos) {
+      if (!photos || (!photos.before && !photos.after)) {
+        return LIVE ? liveUpdate(id, fields) : demoUpdate(id, fields);
+      }
+      if (LIVE) {
+        const payload = {};
+        if (photos.before) payload.before = { fileName: photos.before.name, contentBase64: await fileToBase64(photos.before) };
+        if (photos.after) payload.after = { fileName: photos.after.name, contentBase64: await fileToBase64(photos.after) };
+        return liveUpdate(id, fields, payload);
+      }
+      const extraFields = { ...fields };
+      if (photos.before) extraFields.PhotoBeforeUrl = await demoUploadPhoto(photos.before);
+      if (photos.after) extraFields.PhotoAfterUrl = await demoUploadPhoto(photos.after);
+      return demoUpdate(id, extraFields);
+    },
     async uploadPhoto(file, findingId, stage) { return LIVE ? liveUploadPhoto(file, findingId, stage) : demoUploadPhoto(file, findingId, stage); },
     async resolvePhotoUrl(url) {
       // Demo mode stores data: URLs directly; Google Drive photos get a public
@@ -1286,11 +1311,7 @@ document.getElementById("saveNewBtn").addEventListener("click", async () => {
   btn.disabled = true; btn.textContent = "กำลังบันทึก...";
   try {
     const fields = { TypeOfAudit: typeOfAudit, PatrolDate: patrolDate, Shop: shop, Place: place, Description: description, Grade: grade, Category: category, DueDate: calcDueDate(patrolDate, grade), Status: "เปิดใหม่" };
-    let created = await SheAPI.create(fields);
-    if (selectedPhotoBeforeFile) {
-      const url = await SheAPI.uploadPhoto(selectedPhotoBeforeFile, created.Id, "ก่อนแก้ไข");
-      created = await SheAPI.update(created.Id, { PhotoBeforeUrl: url });
-    }
+    const created = await SheAPI.create(fields, selectedPhotoBeforeFile);
     closeModal("newModalBackdrop");
     upsertFindingLocal(created);
     renderList();
@@ -1493,15 +1514,7 @@ async function saveProgress(id) {
   const btn = document.getElementById("saveProgressBtn");
   btn.disabled = true; btn.textContent = "กำลังบันทึก...";
   try {
-    if (pendingPhotoBeforeFile) {
-      const url = await SheAPI.uploadPhoto(pendingPhotoBeforeFile, f.Id, "ก่อนแก้ไข");
-      fields.PhotoBeforeUrl = url;
-    }
-    if (pendingPhotoAfterFile) {
-      const url = await SheAPI.uploadPhoto(pendingPhotoAfterFile, f.Id, "หลังแก้ไข");
-      fields.PhotoAfterUrl = url;
-    }
-    const updated = await SheAPI.update(f.Id, fields);
+    const updated = await SheAPI.update(f.Id, fields, { before: pendingPhotoBeforeFile, after: pendingPhotoAfterFile });
     pendingPhotoBeforeFile = null;
     pendingPhotoAfterFile = null;
     upsertFindingLocal(updated);
