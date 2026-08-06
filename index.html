@@ -638,6 +638,8 @@
 <script>
 const APP_CONFIG = {
   API_URL: "https://script.google.com/macros/s/AKfycbw0lnxKYp0Qpit6osgq3A0iS8J_q98uRKlRqeINlzuYZ3fjsy4QOBz_Hh7rXNlJ1J3S/exec",
+  // ต้องตรงกับค่า API_TOKEN ใน SHE-Patrol-AppsScript.gs เป๊ะ — กันเรียก API ตรง ๆ นอกหน้าเว็บ
+  API_TOKEN: "1cc4f7797f5b8ddfe61452bd40d8845967f77ffeb1881bb6",
 };
 const LIVE = !!APP_CONFIG.API_URL;
 
@@ -647,7 +649,7 @@ async function apiCall(action, payload = {}) {
   const res = await fetch(APP_CONFIG.API_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ action, ...payload }),
+    body: JSON.stringify({ action, token: APP_CONFIG.API_TOKEN, ...payload }),
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
   const json = await res.json();

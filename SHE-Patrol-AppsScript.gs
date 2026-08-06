@@ -26,7 +26,8 @@
  *        Execute as: Me
  *        Who has access: Anyone
  *      กด Deploy แล้วคัดลอก URL ที่ได้ (ลงท้ายด้วย /exec)
- *   7. นำ URL ไปใส่ใน APP_CONFIG.API_URL ของ index.html
+ *   7. นำ URL ไปใส่ใน APP_CONFIG.API_URL ของ index.html — และตรวจว่า APP_CONFIG.API_TOKEN
+ *      ในไฟล์เดียวกันตรงกับค่า API_TOKEN ด้านล่างนี้เป๊ะ (กัน API ถูกเรียกตรง ๆ นอกหน้าเว็บ)
  *   8. (ทำครั้งเดียว) ตั้ง time-driven trigger ให้ checkSlaEscalation() รันทุกวัน:
  *      Apps Script editor → รูปนาฬิกา (Triggers) → Add Trigger →
  *      Function: checkSlaEscalation, Event source: Time-driven, Day timer, 8-9am
@@ -46,6 +47,11 @@ const FINDINGS_SHEET_NAME = "Findings";
 const USERS_SHEET_NAME = "Users";
 const SETTINGS_SHEET_NAME = "Settings";
 const PHOTOS_FOLDER_NAME = "SHE Patrol Photos";
+
+// กันเรียก API ตรง ๆ ข้าม index.html — ต้องตรงกับ APP_CONFIG.API_TOKEN ในไฟล์ index.html
+// (ไม่ใช่การป้องกันแบบสมบูรณ์ เพราะไฟล์ index.html เปิดสาธารณะอยู่แล้วใครอ่านโค้ดก็เจอค่านี้ได้
+//  แต่กันการเรียกสุ่ม/บอทเก็บข้อมูลอัตโนมัติที่ไม่ได้อ่านโค้ดหน้าเว็บก่อน)
+const API_TOKEN = "1cc4f7797f5b8ddfe61452bd40d8845967f77ffeb1881bb6";
 
 const FINDINGS_HEADERS = [
   "Id", "TypeOfAudit", "PatrolDate", "Shop", "Place", "Description", "Grade", "Category",
@@ -233,6 +239,10 @@ function doPost(e) {
     data = JSON.parse(e.postData.contents);
   } catch (err) {
     return jsonResponse({ ok: false, error: "รูปแบบข้อมูลไม่ถูกต้อง" });
+  }
+
+  if (data.token !== API_TOKEN) {
+    return jsonResponse({ ok: false, error: "ไม่ได้รับอนุญาต" });
   }
 
   try {
