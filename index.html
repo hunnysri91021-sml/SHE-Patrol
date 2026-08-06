@@ -1104,6 +1104,14 @@ let selectedPhotoBeforeFile = null;
 
 async function loadFindings() { findings = await SheAPI.list(); }
 
+// อัปเดต/เพิ่ม finding ในแคชฝั่ง client จากผลลัพธ์ที่ API คืนมาโดยตรง — แทนที่จะ
+// โหลดทั้งลิสต์ใหม่ทุกครั้งที่บันทึก (ช้าเพราะ Apps Script ต้องอ่านทั้งชีตใหม่)
+function upsertFindingLocal(record) {
+  const idx = findings.findIndex(f => f.Id === record.Id);
+  if (idx === -1) findings.unshift(record);
+  else findings[idx] = record;
+}
+
 function getFiltered() {
   const month = document.getElementById("filterMonth").value;
   const shop = document.getElementById("filterShop").value;
@@ -1261,13 +1269,13 @@ document.getElementById("saveNewBtn").addEventListener("click", async () => {
   btn.disabled = true; btn.textContent = "กำลังบันทึก...";
   try {
     const fields = { TypeOfAudit: typeOfAudit, PatrolDate: patrolDate, Shop: shop, Place: place, Description: description, Grade: grade, Category: category, DueDate: calcDueDate(patrolDate, grade), Status: "เปิดใหม่" };
-    const created = await SheAPI.create(fields);
+    let created = await SheAPI.create(fields);
     if (selectedPhotoBeforeFile) {
       const url = await SheAPI.uploadPhoto(selectedPhotoBeforeFile, created.Id, "ก่อนแก้ไข");
-      await SheAPI.update(created.Id, { PhotoBeforeUrl: url });
+      created = await SheAPI.update(created.Id, { PhotoBeforeUrl: url });
     }
     closeModal("newModalBackdrop");
-    await loadFindings();
+    upsertFindingLocal(created);
     renderList();
   } catch (err) {
     alert("เกิดข้อผิดพลาด: " + err.message);
@@ -1440,11 +1448,11 @@ async function saveDetails(id) {
   const btn = document.getElementById("saveDetailsBtn");
   btn.disabled = true; btn.textContent = "กำลังบันทึก...";
   try {
-    await SheAPI.update(f.Id, {
+    const updated = await SheAPI.update(f.Id, {
       TypeOfAudit: typeOfAudit, PatrolDate: patrolDate, Shop: shop, Place: place,
       Description: description, Grade: grade, Category: category,
     });
-    await loadFindings();
+    upsertFindingLocal(updated);
     renderList();
     openDetail(id);
   } catch (err) {
@@ -1476,10 +1484,10 @@ async function saveProgress(id) {
       const url = await SheAPI.uploadPhoto(pendingPhotoAfterFile, f.Id, "หลังแก้ไข");
       fields.PhotoAfterUrl = url;
     }
-    await SheAPI.update(f.Id, fields);
+    const updated = await SheAPI.update(f.Id, fields);
     pendingPhotoBeforeFile = null;
     pendingPhotoAfterFile = null;
-    await loadFindings();
+    upsertFindingLocal(updated);
     renderList();
     openDetail(id);
   } catch (err) {
@@ -1505,8 +1513,8 @@ async function applyStatusChange(id) {
   const btn = document.getElementById("applyStatusBtn");
   btn.disabled = true; btn.textContent = "กำลังอัปเดต...";
   try {
-    await SheAPI.update(f.Id, { Status: newStatus });
-    await loadFindings();
+    const updated = await SheAPI.update(f.Id, { Status: newStatus });
+    upsertFindingLocal(updated);
     renderList();
     openDetail(id);
   } catch (err) {
@@ -1526,9 +1534,9 @@ document.getElementById("confirmCloseBtn").addEventListener("click", async () =>
   const btn = document.getElementById("confirmCloseBtn");
   btn.disabled = true; btn.textContent = "กำลังปิดงาน...";
   try {
-    await SheAPI.update(f.Id, { Status: "ปิดงาน", VerifiedBy: u.Name, Rules_Confirmed_DateTime: new Date().toISOString() });
+    const updated = await SheAPI.update(f.Id, { Status: "ปิดงาน", VerifiedBy: u.Name, Rules_Confirmed_DateTime: new Date().toISOString() });
     closeModal("closeModalBackdrop");
-    await loadFindings();
+    upsertFindingLocal(updated);
     renderList();
     const idToReopen = pendingCloseId;
     pendingCloseId = null;
