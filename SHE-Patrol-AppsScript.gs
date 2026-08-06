@@ -145,9 +145,40 @@ function onOpen() {
     .createMenu("SHE Patrol")
     .addItem("ตั้งค่าชีต (Setup)", "setupSheet")
     .addItem("ตั้งรหัสผ่านเริ่มต้นให้ผู้ใช้งาน (bootstrap)", "setInitialAdminPassword")
+    .addItem("แก้ลิงก์รูปที่โหลดไม่ขึ้น (รูปแตก)", "fixBrokenPhotoUrls")
     .addItem("เช็ค SLA เลยกำหนด (ทดสอบ)", "checkSlaEscalation")
     .addItem("สำรองข้อมูลเข้า MS365 ตอนนี้ (ทดสอบ)", "backupToMS365Email")
     .addToUi();
+}
+
+// ---------------------------------------------------------------
+// รูปที่อัปโหลดก่อนหน้านี้ (ก่อนเปลี่ยนมาใช้ endpoint "thumbnail") ใช้ลิงก์แบบ
+// "uc?export=view" ซึ่ง Google มักเด้งหน้า "ไม่สามารถสแกนไวรัสได้" แทนรูปจริง ทำให้
+// รูปที่บันทึกไปแล้วเห็นเป็นไอคอนแตก — รันเมนูนี้ครั้งเดียวเพื่อแปลงลิงก์เก่าทุกอันในชีต
+// Findings ให้เป็นรูปแบบใหม่ที่โหลดได้จริง (รันซ้ำได้ปลอดภัย ไม่กระทบรูปที่แก้ไปแล้ว)
+function fixBrokenPhotoUrls() {
+  const sheet = getSheet_(FINDINGS_SHEET_NAME);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    SpreadsheetApp.getUi().alert("ยังไม่มีข้อมูลในชีต Findings");
+    return;
+  }
+  const oldPattern = /^https:\/\/drive\.google\.com\/uc\?export=view&id=([^&]+)$/;
+  ["PhotoBeforeUrl", "PhotoAfterUrl"].forEach(header => {
+    const col = FINDINGS_HEADERS.indexOf(header) + 1;
+    const range = sheet.getRange(2, col, lastRow - 1, 1);
+    const values = range.getValues();
+    let fixedCount = 0;
+    const fixed = values.map(row => {
+      const url = row[0];
+      const match = typeof url === "string" && url.match(oldPattern);
+      if (!match) return row;
+      fixedCount++;
+      return [`https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`];
+    });
+    if (fixedCount > 0) range.setValues(fixed);
+  });
+  SpreadsheetApp.getUi().alert("แก้ลิงก์รูปเก่าที่โหลดไม่ขึ้นเรียบร้อย — รีเฟรชหน้าเว็บแล้วลองเปิดดูรายการที่รูปเคยแตกอีกครั้ง");
 }
 
 // ---------------------------------------------------------------
@@ -464,7 +495,9 @@ function uploadPhotoFile_(stage, fileName, contentBase64) {
   const folder = getOrCreateFolder_(PHOTOS_FOLDER_NAME);
   const file = folder.createFile(blob);
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  return `https://drive.google.com/uc?export=view&id=${file.getId()}`;
+  // ใช้ endpoint "thumbnail" ไม่ใช่ "uc?export=view" — แบบหลังนี้ Google มักเด้งหน้า
+  // "ไม่สามารถสแกนไวรัสได้" แทนรูปจริงเวลาฝัง <img src> ตรงๆ ทำให้รูปพังเป็นไอคอนแตก
+  return `https://drive.google.com/thumbnail?id=${file.getId()}&sz=w1000`;
 }
 
 function getOrCreateFolder_(name) {
