@@ -1099,6 +1099,7 @@ let findings = [];
 let currentDetailId = null;
 let pendingCloseId = null;
 let pendingPhotoAfterFile = null;
+let pendingPhotoBeforeFile = null;
 let selectedPhotoBeforeFile = null;
 
 async function loadFindings() { findings = await SheAPI.list(); }
@@ -1281,6 +1282,7 @@ document.getElementById("saveNewBtn").addEventListener("click", async () => {
 async function openDetail(id) {
   currentDetailId = id;
   pendingPhotoAfterFile = null;
+  pendingPhotoBeforeFile = null;
   const f = findings.find(x => String(x.Id) === String(id));
   if (!f) return;
   document.getElementById("detailTitle").textContent = `${f.Place || "-"} · ${f.Shop}`;
@@ -1326,7 +1328,12 @@ async function openDetail(id) {
     <div class="detail-row"><div class="k">กำหนดปิดงาน</div><div class="v">${fmtDate(f.DueDate)} ${overdue ? '<span class="overdue-tag">เลยกำหนด</span>' : ""}</div></div>
     <div class="detail-row"><div class="k">สถานะ</div><div class="v"><span class="badge st-${f.Status}">${f.Status}</span></div></div>
     <div class="detail-row"><div class="k">รูปสภาพที่พบ</div><div class="v">
-      ${beforeSrc ? `<img src="${beforeSrc}" style="max-width:100%;max-height:200px;border-radius:6px;">` : '<span style="color:var(--muted)">ไม่มีรูป</span>'}
+      ${editable ? `
+        <div class="photo-box">
+          <input type="file" accept="image/*" capture="environment" id="d_photoBefore">
+          <img id="d_photoBeforePreview" src="${beforeSrc || ""}" style="${beforeSrc ? "display:block" : "display:none"}">
+        </div>
+      ` : (beforeSrc ? `<img src="${beforeSrc}" style="max-width:100%;max-height:200px;border-radius:6px;">` : '<span style="color:var(--muted)">ไม่มีรูป</span>')}
     </div></div>
 
     <div class="section-title">การแก้ไข / ความคืบหน้า</div>
@@ -1367,6 +1374,20 @@ async function openDetail(id) {
   }
 
   if (editable) {
+    document.getElementById("d_photoBefore").addEventListener("change", async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        pendingPhotoBeforeFile = await compressImage(file);
+        const img = document.getElementById("d_photoBeforePreview");
+        img.src = URL.createObjectURL(pendingPhotoBeforeFile);
+        img.style.display = "block";
+      } catch (err) {
+        pendingPhotoBeforeFile = null;
+        e.target.value = "";
+        alert("แนบรูปนี้ไม่ได้ — ไฟล์อาจเสียหายหรือเป็นฟอร์แมตที่เบราว์เซอร์ไม่รองรับ (เช่น HEIC บางรุ่น) ลองถ่ายรูปใหม่หรือเลือกไฟล์ JPG/PNG แทน");
+      }
+    });
     document.getElementById("d_photoAfter").addEventListener("change", async e => {
       const file = e.target.files[0];
       if (!file) return;
@@ -1447,11 +1468,16 @@ async function saveProgress(id) {
   const btn = document.getElementById("saveProgressBtn");
   btn.disabled = true; btn.textContent = "กำลังบันทึก...";
   try {
+    if (pendingPhotoBeforeFile) {
+      const url = await SheAPI.uploadPhoto(pendingPhotoBeforeFile, f.Id, "ก่อนแก้ไข");
+      fields.PhotoBeforeUrl = url;
+    }
     if (pendingPhotoAfterFile) {
       const url = await SheAPI.uploadPhoto(pendingPhotoAfterFile, f.Id, "หลังแก้ไข");
       fields.PhotoAfterUrl = url;
     }
     await SheAPI.update(f.Id, fields);
+    pendingPhotoBeforeFile = null;
     pendingPhotoAfterFile = null;
     await loadFindings();
     renderList();
