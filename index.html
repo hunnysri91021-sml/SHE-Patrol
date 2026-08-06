@@ -171,6 +171,16 @@
     background:#FAFBFC;
   }
   .photo-box img{max-width:100%;max-height:220px;border-radius:6px;margin-top:8px;}
+  .photo-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;justify-content:center;}
+  .photo-thumbs a{display:block;}
+  .photo-thumbs img{width:72px;height:72px;max-width:72px;max-height:72px;object-fit:cover;margin-top:0;border:1px solid var(--border);}
+  .photo-thumb-pending{position:relative;}
+  .photo-thumb-pending .rm{
+    position:absolute;top:-6px;right:-6px;width:19px;height:19px;border-radius:50%;
+    background:var(--accent);color:#fff;font-size:12px;line-height:19px;text-align:center;
+    cursor:pointer;border:none;padding:0;font-weight:700;
+  }
+  .photo-count-hint{font-size:11.5px;color:var(--muted);margin-top:6px;}
   .section-title{font-size:13px;font-weight:700;color:var(--navy);margin:18px 0 8px;text-transform:uppercase;letter-spacing:.03em;}
   .status-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
   .readonly-msg{
@@ -527,8 +537,9 @@
         <div class="field full">
           <label>รูปสภาพที่พบ</label>
           <div class="photo-box">
-            <input type="file" accept="image/*" capture="environment" id="f_photoBefore">
-            <img id="f_photoBeforePreview" style="display:none">
+            <input type="file" accept="image/*" multiple id="f_photoBefore">
+            <div class="photo-count-hint">แนบได้สูงสุด 5 รูป (เลือกได้ทีละหลายรูป)</div>
+            <div class="photo-thumbs" id="f_photoBeforeThumbs"></div>
           </div>
         </div>
       </div>
@@ -895,7 +906,7 @@ const SheAPI = (function () {
 
   async function liveList() { return apiCall("listFindings"); }
   async function liveGet(id) { return apiCall("getFinding", { id: Number(id) }); }
-  async function liveCreate(fields, photo) { return apiCall("createFinding", { fields, photo }); }
+  async function liveCreate(fields, photos) { return apiCall("createFinding", { fields, photos }); }
   async function liveUpdate(id, fields, photos) { return apiCall("updateFinding", { id: Number(id), fields, photos }); }
   async function liveUploadPhoto(file, findingId, stage) {
     const contentBase64 = await fileToBase64(file);
@@ -912,28 +923,40 @@ const SheAPI = (function () {
     LIVE,
     async list() { return LIVE ? liveList() : demoList(); },
     async get(id) { return LIVE ? liveGet(id) : demoGet(id); },
-    async create(fields, photoFile) {
-      if (!photoFile) return LIVE ? liveCreate(fields) : demoCreate(fields);
+    // photoFiles: array (0-N) ของ File ที่ผ่าน compressImage มาแล้ว
+    async create(fields, photoFiles) {
+      const files = photoFiles || [];
+      if (!files.length) return LIVE ? liveCreate(fields) : demoCreate(fields);
       if (LIVE) {
-        const contentBase64 = await fileToBase64(photoFile);
-        return liveCreate(fields, { fileName: photoFile.name, contentBase64 });
+        const photos = await Promise.all(files.map(async f => ({ fileName: f.name, contentBase64: await fileToBase64(f) })));
+        return liveCreate(fields, photos);
       }
-      const dataUrl = await demoUploadPhoto(photoFile);
-      return demoCreate({ ...fields, PhotoBeforeUrl: dataUrl });
+      const dataUrls = await Promise.all(files.map(f => demoUploadPhoto(f)));
+      return demoCreate({ ...fields, PhotoBeforeUrl: dataUrls.join(",") });
     },
+    // photos: { before: File[], after: File[] } — รูปใหม่จะต่อท้ายรูปเดิมของรายการนั้น ไม่แทนที่
     async update(id, fields, photos) {
-      if (!photos || (!photos.before && !photos.after)) {
+      const before = (photos && photos.before) || [];
+      const after = (photos && photos.after) || [];
+      if (!before.length && !after.length) {
         return LIVE ? liveUpdate(id, fields) : demoUpdate(id, fields);
       }
       if (LIVE) {
         const payload = {};
-        if (photos.before) payload.before = { fileName: photos.before.name, contentBase64: await fileToBase64(photos.before) };
-        if (photos.after) payload.after = { fileName: photos.after.name, contentBase64: await fileToBase64(photos.after) };
+        if (before.length) payload.before = await Promise.all(before.map(async f => ({ fileName: f.name, contentBase64: await fileToBase64(f) })));
+        if (after.length) payload.after = await Promise.all(after.map(async f => ({ fileName: f.name, contentBase64: await fileToBase64(f) })));
         return liveUpdate(id, fields, payload);
       }
+      const current = await demoGet(id);
       const extraFields = { ...fields };
-      if (photos.before) extraFields.PhotoBeforeUrl = await demoUploadPhoto(photos.before);
-      if (photos.after) extraFields.PhotoAfterUrl = await demoUploadPhoto(photos.after);
+      if (before.length) {
+        const newUrls = await Promise.all(before.map(f => demoUploadPhoto(f)));
+        extraFields.PhotoBeforeUrl = [current.PhotoBeforeUrl, ...newUrls].filter(Boolean).join(",");
+      }
+      if (after.length) {
+        const newUrls = await Promise.all(after.map(f => demoUploadPhoto(f)));
+        extraFields.PhotoAfterUrl = [current.PhotoAfterUrl, ...newUrls].filter(Boolean).join(",");
+      }
       return demoUpdate(id, extraFields);
     },
     async uploadPhoto(file, findingId, stage) { return LIVE ? liveUploadPhoto(file, findingId, stage) : demoUploadPhoto(file, findingId, stage); },
@@ -1129,9 +1152,34 @@ function compressImage(file, maxDim = 1280, quality = 0.75) {
 let findings = [];
 let currentDetailId = null;
 let pendingCloseId = null;
-let pendingPhotoAfterFile = null;
-let pendingPhotoBeforeFile = null;
-let selectedPhotoBeforeFile = null;
+const MAX_PHOTOS_PER_STAGE = 5;
+let pendingPhotoAfterFiles = [];
+let pendingPhotoBeforeFiles = [];
+let selectedPhotoBeforeFiles = [];
+
+// สร้างแกลเลอรีรูปตัวอย่างที่ "เลือกไว้แต่ยังไม่บันทึก" — แต่ละรูปมีปุ่ม x เอาออกจากรายการที่จะแนบได้
+// ก่อนกดบันทึกจริง (ไม่ใช่ลบรูปที่บันทึกไปแล้ว — อันนั้นยังไม่รองรับ)
+function renderPendingPhotoThumbs(containerEl, files, onRemove) {
+  containerEl.innerHTML = files.map((file, i) => `
+    <div class="photo-thumb-pending" data-i="${i}">
+      <img src="${URL.createObjectURL(file)}">
+      <button type="button" class="rm" data-i="${i}">✕</button>
+    </div>
+  `).join("");
+  containerEl.querySelectorAll(".rm").forEach(btn => {
+    btn.addEventListener("click", () => onRemove(Number(btn.dataset.i)));
+  });
+}
+
+// รูปที่บันทึกไปแล้ว (คั่นด้วยจุลภาคในคอลัมน์ PhotoBeforeUrl/PhotoAfterUrl) — ต่อท้ายรูปใหม่เข้าไป
+// เรื่อยๆ ไม่ได้แทนที่ของเดิม
+function splitPhotoUrls(value) {
+  return (value || "").split(",").map(s => s.trim()).filter(Boolean);
+}
+function renderSavedPhotoThumbs(urls) {
+  if (!urls.length) return '<span style="color:var(--muted)">ไม่มีรูป</span>';
+  return `<div class="photo-thumbs">${urls.map(u => `<a href="${u}" target="_blank" rel="noopener"><img src="${u}"></a>`).join("")}</div>`;
+}
 
 async function loadFindings() { findings = await SheAPI.list(); }
 
@@ -1220,19 +1268,28 @@ document.getElementById("f_grade").addEventListener("change", e => {
   const pd = document.getElementById("f_patrolDate").value || todayStr();
   hint.textContent = `กำหนดปิดงานอัตโนมัติ: ${fmtDate(calcDueDate(pd, g))} (SLA ${SLA_DAYS[g]} วัน)`;
 });
+function refreshFPhotoBeforeThumbs() {
+  renderPendingPhotoThumbs(document.getElementById("f_photoBeforeThumbs"), selectedPhotoBeforeFiles, i => {
+    selectedPhotoBeforeFiles.splice(i, 1);
+    refreshFPhotoBeforeThumbs();
+  });
+}
 document.getElementById("f_photoBefore").addEventListener("change", async e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  try {
-    selectedPhotoBeforeFile = await compressImage(file);
-    const img = document.getElementById("f_photoBeforePreview");
-    img.src = URL.createObjectURL(selectedPhotoBeforeFile);
-    img.style.display = "block";
-  } catch (err) {
-    selectedPhotoBeforeFile = null;
-    e.target.value = "";
-    alert("แนบรูปนี้ไม่ได้ — ไฟล์อาจเสียหายหรือเป็นฟอร์แมตที่เบราว์เซอร์ไม่รองรับ (เช่น HEIC บางรุ่น) ลองถ่ายรูปใหม่หรือเลือกไฟล์ JPG/PNG แทน");
+  const files = Array.from(e.target.files || []);
+  e.target.value = ""; // เคลียร์ input ทันที กันเลือกไฟล์เดิมซ้ำไม่ขึ้น change event รอบถัดไป
+  if (!files.length) return;
+  if (selectedPhotoBeforeFiles.length + files.length > MAX_PHOTOS_PER_STAGE) {
+    alert(`แนบได้สูงสุด ${MAX_PHOTOS_PER_STAGE} รูป (ตอนนี้เลือกไว้ ${selectedPhotoBeforeFiles.length} รูปแล้ว)`);
+    return;
   }
+  for (const file of files) {
+    try {
+      selectedPhotoBeforeFiles.push(await compressImage(file));
+    } catch (err) {
+      alert(`แนบรูป "${file.name}" ไม่ได้ — ไฟล์อาจเสียหายหรือเป็นฟอร์แมตที่เบราว์เซอร์ไม่รองรับ (เช่น HEIC บางรุ่น) ลองถ่ายรูปใหม่หรือเลือกไฟล์ JPG/PNG แทน`);
+    }
+  }
+  refreshFPhotoBeforeThumbs();
 });
 /* ======================================================================
  * รายการตัวเลือก TypeOfAudit/Shop/Category — แก้ไขได้จากแท็บ "ตั้งค่า" แทนที่
@@ -1292,9 +1349,8 @@ document.getElementById("newFindingBtn").addEventListener("click", async () => {
   document.getElementById("f_grade").value = "";
   document.getElementById("f_category").value = "";
   document.getElementById("f_slaHint").textContent = "";
-  selectedPhotoBeforeFile = null;
-  const img = document.getElementById("f_photoBeforePreview");
-  img.style.display = "none"; img.removeAttribute("src");
+  selectedPhotoBeforeFiles = [];
+  refreshFPhotoBeforeThumbs();
   document.getElementById("f_photoBefore").value = "";
   openModal("newModalBackdrop");
 });
@@ -1311,8 +1367,9 @@ document.getElementById("saveNewBtn").addEventListener("click", async () => {
   btn.disabled = true; btn.textContent = "กำลังบันทึก...";
   try {
     const fields = { TypeOfAudit: typeOfAudit, PatrolDate: patrolDate, Shop: shop, Place: place, Description: description, Grade: grade, Category: category, DueDate: calcDueDate(patrolDate, grade), Status: "เปิดใหม่" };
-    const created = await SheAPI.create(fields, selectedPhotoBeforeFile);
+    const created = await SheAPI.create(fields, selectedPhotoBeforeFiles);
     closeModal("newModalBackdrop");
+    selectedPhotoBeforeFiles = [];
     upsertFindingLocal(created);
     renderList();
   } catch (err) {
@@ -1327,8 +1384,8 @@ document.getElementById("saveNewBtn").addEventListener("click", async () => {
  * ====================================================================== */
 async function openDetail(id) {
   currentDetailId = id;
-  pendingPhotoAfterFile = null;
-  pendingPhotoBeforeFile = null;
+  pendingPhotoAfterFiles = [];
+  pendingPhotoBeforeFiles = [];
   const f = findings.find(x => String(x.Id) === String(id));
   if (!f) return;
   document.getElementById("detailTitle").textContent = `${f.Place || "-"} · ${f.Shop}`;
@@ -1374,12 +1431,14 @@ async function openDetail(id) {
     <div class="detail-row"><div class="k">กำหนดปิดงาน</div><div class="v">${fmtDate(f.DueDate)} ${overdue ? '<span class="overdue-tag">เลยกำหนด</span>' : ""}</div></div>
     <div class="detail-row"><div class="k">สถานะ</div><div class="v"><span class="badge st-${f.Status}">${f.Status}</span></div></div>
     <div class="detail-row"><div class="k">รูปสภาพที่พบ</div><div class="v">
+      ${renderSavedPhotoThumbs(splitPhotoUrls(beforeSrc))}
       ${editable ? `
-        <div class="photo-box">
-          <input type="file" accept="image/*" capture="environment" id="d_photoBefore">
-          <img id="d_photoBeforePreview" src="${beforeSrc || ""}" style="${beforeSrc ? "display:block" : "display:none"}">
+        <div class="photo-box" style="margin-top:8px;">
+          <input type="file" accept="image/*" multiple id="d_photoBefore">
+          <div class="photo-count-hint">แนบเพิ่มได้สูงสุด ${MAX_PHOTOS_PER_STAGE} รูปต่อครั้ง (จะต่อท้ายรูปเดิม ไม่ได้แทนที่)</div>
+          <div class="photo-thumbs" id="d_photoBeforeThumbs"></div>
         </div>
-      ` : (beforeSrc ? `<img src="${beforeSrc}" style="max-width:100%;max-height:200px;border-radius:6px;">` : '<span style="color:var(--muted)">ไม่มีรูป</span>')}
+      ` : ""}
     </div></div>
 
     <div class="section-title">การแก้ไข / ความคืบหน้า</div>
@@ -1388,9 +1447,11 @@ async function openDetail(id) {
       <div class="field full"><label>ผู้รับผิดชอบดำเนินการ</label><input type="text" id="d_actionResponsible" value="${escapeHtml(f.ActionResponsible)}"></div>
       <div class="field full"><label>มาตรการแก้ไข (Countermeasure)</label><textarea id="d_countermeasure" rows="2">${escapeHtml(f.Countermeasure)}</textarea></div>
       <div class="field full"><label>รูปหลังแก้ไข</label>
-        <div class="photo-box">
-          <input type="file" accept="image/*" capture="environment" id="d_photoAfter">
-          <img id="d_photoAfterPreview" src="${afterSrc || ""}" style="${afterSrc ? "display:block" : "display:none"}">
+        ${renderSavedPhotoThumbs(splitPhotoUrls(afterSrc))}
+        <div class="photo-box" style="margin-top:8px;">
+          <input type="file" accept="image/*" multiple id="d_photoAfter">
+          <div class="photo-count-hint">แนบเพิ่มได้สูงสุด ${MAX_PHOTOS_PER_STAGE} รูปต่อครั้ง (จะต่อท้ายรูปเดิม ไม่ได้แทนที่)</div>
+          <div class="photo-thumbs" id="d_photoAfterThumbs"></div>
         </div>
       </div>
     ` : `
@@ -1398,7 +1459,7 @@ async function openDetail(id) {
       <div class="detail-row"><div class="k">ผู้รับผิดชอบ</div><div class="v">${escapeHtml(f.ActionResponsible) || "-"}</div></div>
       <div class="detail-row"><div class="k">มาตรการแก้ไข</div><div class="v">${escapeHtml(f.Countermeasure) || "-"}</div></div>
       <div class="detail-row"><div class="k">รูปหลังแก้ไข</div><div class="v">
-        ${afterSrc ? `<img src="${afterSrc}" style="max-width:100%;max-height:200px;border-radius:6px;">` : '<span style="color:var(--muted)">ไม่มีรูป</span>'}
+        ${renderSavedPhotoThumbs(splitPhotoUrls(afterSrc))}
       </div></div>
     `}
 
@@ -1420,33 +1481,47 @@ async function openDetail(id) {
   }
 
   if (editable) {
+    const refreshDBeforeThumbs = () => renderPendingPhotoThumbs(document.getElementById("d_photoBeforeThumbs"), pendingPhotoBeforeFiles, i => {
+      pendingPhotoBeforeFiles.splice(i, 1);
+      refreshDBeforeThumbs();
+    });
+    const refreshDAfterThumbs = () => renderPendingPhotoThumbs(document.getElementById("d_photoAfterThumbs"), pendingPhotoAfterFiles, i => {
+      pendingPhotoAfterFiles.splice(i, 1);
+      refreshDAfterThumbs();
+    });
     document.getElementById("d_photoBefore").addEventListener("change", async e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      try {
-        pendingPhotoBeforeFile = await compressImage(file);
-        const img = document.getElementById("d_photoBeforePreview");
-        img.src = URL.createObjectURL(pendingPhotoBeforeFile);
-        img.style.display = "block";
-      } catch (err) {
-        pendingPhotoBeforeFile = null;
-        e.target.value = "";
-        alert("แนบรูปนี้ไม่ได้ — ไฟล์อาจเสียหายหรือเป็นฟอร์แมตที่เบราว์เซอร์ไม่รองรับ (เช่น HEIC บางรุ่น) ลองถ่ายรูปใหม่หรือเลือกไฟล์ JPG/PNG แทน");
+      const files = Array.from(e.target.files || []);
+      e.target.value = "";
+      if (!files.length) return;
+      if (pendingPhotoBeforeFiles.length + files.length > MAX_PHOTOS_PER_STAGE) {
+        alert(`แนบเพิ่มได้สูงสุด ${MAX_PHOTOS_PER_STAGE} รูปต่อครั้ง (ตอนนี้เลือกไว้ ${pendingPhotoBeforeFiles.length} รูปแล้ว)`);
+        return;
       }
+      for (const file of files) {
+        try {
+          pendingPhotoBeforeFiles.push(await compressImage(file));
+        } catch (err) {
+          alert(`แนบรูป "${file.name}" ไม่ได้ — ไฟล์อาจเสียหายหรือเป็นฟอร์แมตที่เบราว์เซอร์ไม่รองรับ (เช่น HEIC บางรุ่น) ลองถ่ายรูปใหม่หรือเลือกไฟล์ JPG/PNG แทน`);
+        }
+      }
+      refreshDBeforeThumbs();
     });
     document.getElementById("d_photoAfter").addEventListener("change", async e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      try {
-        pendingPhotoAfterFile = await compressImage(file);
-        const img = document.getElementById("d_photoAfterPreview");
-        img.src = URL.createObjectURL(pendingPhotoAfterFile);
-        img.style.display = "block";
-      } catch (err) {
-        pendingPhotoAfterFile = null;
-        e.target.value = "";
-        alert("แนบรูปนี้ไม่ได้ — ไฟล์อาจเสียหายหรือเป็นฟอร์แมตที่เบราว์เซอร์ไม่รองรับ (เช่น HEIC บางรุ่น) ลองถ่ายรูปใหม่หรือเลือกไฟล์ JPG/PNG แทน");
+      const files = Array.from(e.target.files || []);
+      e.target.value = "";
+      if (!files.length) return;
+      if (pendingPhotoAfterFiles.length + files.length > MAX_PHOTOS_PER_STAGE) {
+        alert(`แนบเพิ่มได้สูงสุด ${MAX_PHOTOS_PER_STAGE} รูปต่อครั้ง (ตอนนี้เลือกไว้ ${pendingPhotoAfterFiles.length} รูปแล้ว)`);
+        return;
       }
+      for (const file of files) {
+        try {
+          pendingPhotoAfterFiles.push(await compressImage(file));
+        } catch (err) {
+          alert(`แนบรูป "${file.name}" ไม่ได้ — ไฟล์อาจเสียหายหรือเป็นฟอร์แมตที่เบราว์เซอร์ไม่รองรับ (เช่น HEIC บางรุ่น) ลองถ่ายรูปใหม่หรือเลือกไฟล์ JPG/PNG แทน`);
+        }
+      }
+      refreshDAfterThumbs();
     });
   }
 
@@ -1514,9 +1589,9 @@ async function saveProgress(id) {
   const btn = document.getElementById("saveProgressBtn");
   btn.disabled = true; btn.textContent = "กำลังบันทึก...";
   try {
-    const updated = await SheAPI.update(f.Id, fields, { before: pendingPhotoBeforeFile, after: pendingPhotoAfterFile });
-    pendingPhotoBeforeFile = null;
-    pendingPhotoAfterFile = null;
+    const updated = await SheAPI.update(f.Id, fields, { before: pendingPhotoBeforeFiles, after: pendingPhotoAfterFiles });
+    pendingPhotoBeforeFiles = [];
+    pendingPhotoAfterFiles = [];
     upsertFindingLocal(updated);
     renderList();
     openDetail(id);

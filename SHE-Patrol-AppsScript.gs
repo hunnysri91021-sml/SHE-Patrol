@@ -283,7 +283,7 @@ function doPost(e) {
     switch (data.action) {
       case "listFindings": return jsonResponse({ ok: true, data: listFindings_() });
       case "getFinding": return jsonResponse({ ok: true, data: getFinding_(data.id) });
-      case "createFinding": return jsonResponse({ ok: true, data: createFinding_(data.fields || {}, data.photo) });
+      case "createFinding": return jsonResponse({ ok: true, data: createFinding_(data.fields || {}, data.photos) });
       case "updateFinding": return jsonResponse({ ok: true, data: updateFinding_(data.id, data.fields || {}, data.photos) });
       case "listUsers": return jsonResponse({ ok: true, data: listUsers_() });
       case "createUser": return jsonResponse({ ok: true, data: createUser_(data.fields || {}) });
@@ -361,11 +361,11 @@ function getFinding_(id) {
   return row;
 }
 
-function createFinding_(fields, photo) {
-  // อัปโหลดรูปก่อนเข้า lock (ถ้ามี) — รวมสร้างรายการ + แนบรูปเป็นคำขอเดียว แทนที่จะ
-  // สร้างก่อนแล้วค่อยยิงอีกรอบเพื่อแนบรูป (ลด round-trip ไป Apps Script จาก 3 ครั้งเหลือ 1)
-  if (photo && photo.contentBase64) {
-    fields = Object.assign({}, fields, { PhotoBeforeUrl: uploadPhotoFile_("ก่อนแก้ไข", photo.fileName, photo.contentBase64) });
+function createFinding_(fields, photos) {
+  // อัปโหลดรูปก่อนเข้า lock (ถ้ามี) — รวมสร้างรายการ + แนบรูป (ได้หลายรูป) เป็นคำขอเดียว
+  // แทนที่จะสร้างก่อนแล้วค่อยยิงอีกรอบเพื่อแนบรูป (ลด round-trip ไป Apps Script จาก 3 ครั้งเหลือ 1)
+  if (photos && photos.length) {
+    fields = Object.assign({}, fields, { PhotoBeforeUrl: uploadPhotoFiles_("ก่อนแก้ไข", photos) });
   }
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -387,14 +387,21 @@ function createFinding_(fields, photo) {
 }
 
 function updateFinding_(id, fields, photos) {
-  // เช่นเดียวกับ createFinding_ — อัปโหลดรูปก่อนเข้า lock แล้วรวมเป็นคำขอเดียว
-  if (photos && (photos.before || photos.after)) {
+  // เช่นเดียวกับ createFinding_ — อัปโหลดรูป (ได้หลายรูป) ก่อนเข้า lock แล้วรวมเป็นคำขอเดียว
+  // รูปใหม่จะ "ต่อท้าย" รูปเดิมของรายการ (คั่นด้วยจุลภาคในคอลัมน์เดียวกัน) ไม่ใช่แทนที่ —
+  // เลยต้องอ่านค่าปัจจุบันก่อน (นอก lock เพื่อไม่ให้ยึด lock ไว้นานระหว่างอัปโหลดรูปที่ช้ากว่า)
+  const beforeList = photos && photos.before ? photos.before : [];
+  const afterList = photos && photos.after ? photos.after : [];
+  if (beforeList.length || afterList.length) {
     fields = Object.assign({}, fields);
-    if (photos.before && photos.before.contentBase64) {
-      fields.PhotoBeforeUrl = uploadPhotoFile_("ก่อนแก้ไข", photos.before.fileName, photos.before.contentBase64);
+    const current = getFinding_(id);
+    if (beforeList.length) {
+      const newUrls = uploadPhotoFiles_("ก่อนแก้ไข", beforeList);
+      fields.PhotoBeforeUrl = [current.PhotoBeforeUrl, newUrls].filter(Boolean).join(",");
     }
-    if (photos.after && photos.after.contentBase64) {
-      fields.PhotoAfterUrl = uploadPhotoFile_("หลังแก้ไข", photos.after.fileName, photos.after.contentBase64);
+    if (afterList.length) {
+      const newUrls = uploadPhotoFiles_("หลังแก้ไข", afterList);
+      fields.PhotoAfterUrl = [current.PhotoAfterUrl, newUrls].filter(Boolean).join(",");
     }
   }
   const lock = LockService.getScriptLock();
@@ -484,6 +491,16 @@ function updateUser_(id, fields) {
 // ---------------------------------------------------------------
 function uploadPhoto_(findingId, stage, fileName, contentBase64) {
   return { fileUrl: uploadPhotoFile_(stage, fileName, contentBase64) };
+}
+
+// อัปโหลดหลายไฟล์ (findings[].{fileName, contentBase64}) แล้วคืน URL คั่นด้วยจุลภาคเดียว —
+// ใช้เก็บในคอลัมน์ PhotoBeforeUrl/PhotoAfterUrl เดียวกัน (ไม่เพิ่มคอลัมน์ใหม่ เหมือน
+// Shop_Options/Category_Options ที่เก็บหลายค่าคั่นจุลภาคในคอลัมน์เดียวกันอยู่แล้ว)
+function uploadPhotoFiles_(stage, files) {
+  return (files || [])
+    .filter(f => f && f.contentBase64)
+    .map(f => uploadPhotoFile_(stage, f.fileName, f.contentBase64))
+    .join(",");
 }
 
 // ใช้ร่วมกันทั้ง action "uploadPhoto" เดี่ยวๆ (แนบรูปเพิ่มทีหลัง) และตอน
