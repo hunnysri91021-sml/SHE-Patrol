@@ -330,37 +330,41 @@ function getFinding_(id) {
 function createFinding_(fields) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
+  let record;
   try {
     const id = nextId_(FINDINGS_SHEET_NAME, FINDINGS_HEADERS);
-    const record = Object.assign({
+    record = Object.assign({
       Id: id, PhotoBeforeUrl: "", PhotoAfterUrl: "", RootCause: "", ActionResponsible: "",
       Countermeasure: "", Status: "เปิดใหม่", VerifiedBy: "", Rules_Confirmed_DateTime: "",
     }, fields, { Id: id });
     const row = FINDINGS_HEADERS.map(h => (record[h] !== undefined && record[h] !== null) ? record[h] : "");
     getSheet_(FINDINGS_SHEET_NAME).appendRow(row);
-    notifyNewFinding_(record);
-    return record;
   } finally {
     lock.releaseLock();
   }
+  // ส่งอีเมลนอก lock — กันคนอื่นที่กำลังจะบันทึกพร้อมกันต้องรอจนกว่าอีเมลจะส่งเสร็จ
+  notifyNewFinding_(record);
+  return record;
 }
 
 function updateFinding_(id, fields) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
+  let before, after;
   try {
     const rowNum = findRowNumberById_(FINDINGS_SHEET_NAME, FINDINGS_HEADERS, id);
     if (rowNum === -1) throw new Error("ไม่พบ finding รหัส " + id);
     const sheet = getSheet_(FINDINGS_SHEET_NAME);
-    const before = rowToObject_(FINDINGS_HEADERS, sheet.getRange(rowNum, 1, 1, FINDINGS_HEADERS.length).getValues()[0]);
-    const after = Object.assign({}, before, fields, { Id: before.Id });
+    before = rowToObject_(FINDINGS_HEADERS, sheet.getRange(rowNum, 1, 1, FINDINGS_HEADERS.length).getValues()[0]);
+    after = Object.assign({}, before, fields, { Id: before.Id });
     const row = FINDINGS_HEADERS.map(h => (after[h] !== undefined && after[h] !== null) ? after[h] : "");
     sheet.getRange(rowNum, 1, 1, FINDINGS_HEADERS.length).setValues([row]);
-    notifyFindingStatusChange_(before, after);
-    return after;
   } finally {
     lock.releaseLock();
   }
+  // ส่งอีเมลนอก lock — กันคนอื่นที่กำลังจะบันทึกพร้อมกันต้องรอจนกว่าอีเมลจะส่งเสร็จ
+  notifyFindingStatusChange_(before, after);
+  return after;
 }
 
 // ---------------------------------------------------------------

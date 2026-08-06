@@ -1219,7 +1219,13 @@ function renderOptionSelect(id, options, placeholder) {
     options.map(o => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join("");
   if (options.includes(current)) sel.value = current;
 }
-async function refreshDynamicOptions() {
+// ตัวเลือก Shop/Category/TypeOfAudit แทบไม่เปลี่ยนระหว่าง session เดียวกัน — โหลดจาก
+// Settings ครั้งเดียวพอ (ไม่ใช่ทุกครั้งที่เปิด modal "บันทึกรายการใหม่"/"เพิ่มผู้ใช้งาน")
+// ลด round-trip ไป Apps Script ที่ไม่จำเป็น ยกเว้นตอนหลัง Admin กดบันทึกค่าตั้งค่าใหม่
+// (เรียก refreshDynamicOptions(true) ตรงนั้นเพื่อบังคับโหลดใหม่)
+let dynamicOptionsLoaded = false;
+async function refreshDynamicOptions(force) {
+  if (dynamicOptionsLoaded && !force) return;
   try {
     const settings = await SheSettingsAPI.list();
     const byKey = {};
@@ -1235,6 +1241,7 @@ async function refreshDynamicOptions() {
     renderOptionSelect("f_typeOfAudit", TYPE_OF_AUDIT_OPTIONS, "-- เลือก --");
     const rptShopSel = document.getElementById("rptShop");
     if (rptShopSel) { rptShopSel.dataset.filled = ""; rptShopSel.innerHTML = '<option value="">ทั้งหมด</option>'; fillSelectOnce("rptShop", SHOP_OPTIONS); }
+    dynamicOptionsLoaded = true;
   } catch (err) {
     // เงียบไว้พอ — ยังใช้ค่า fallback/ค่าที่มีอยู่เดิมได้ ไม่บล็อกการทำงาน
   }
@@ -1884,7 +1891,7 @@ document.getElementById("saveSettingsBtn").addEventListener("click", async () =>
   btn.disabled = true; btn.textContent = "กำลังบันทึก...";
   try {
     await SheSettingsAPI.update(values);
-    await refreshDynamicOptions();
+    await refreshDynamicOptions(true);
     alert("บันทึกการตั้งค่าเรียบร้อย");
   } catch (err) {
     alert("เกิดข้อผิดพลาด: " + err.message);
