@@ -272,6 +272,9 @@
   .rtbl{width:100%;border-collapse:collapse;font-size:10.5px;margin-top:10px;}
   .rtbl th,.rtbl td{border:1px solid #ccc;padding:5px 6px;vertical-align:top;}
   .rtbl th{background:var(--navy-pale);font-weight:700;text-align:center;color:var(--navy);}
+  .rtbl .rtbl-photos{display:flex;flex-wrap:wrap;gap:3px;}
+  .rtbl .rtbl-photos img{width:44px;height:44px;object-fit:cover;border:1px solid #ccc;}
+  @media print{ .rtbl .rtbl-photos img{width:38px;height:38px;} }
   .sign-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px;font-size:11px;}
   .sign-row div{border-top:1px solid #999;padding-top:6px;text-align:center;}
 
@@ -1658,10 +1661,10 @@ document.getElementById("confirmCloseBtn").addEventListener("click", async () =>
  * ====================================================================== */
 function exportRowsToCsv(list, filename) {
   if (!list.length) { alert("ไม่มีข้อมูลให้ export ในตัวกรองนี้"); return; }
-  const headers = ["No", "ประเภทการตรวจ", "วันที่ตรวจ", "หน่วยงาน", "จุดที่พบ", "รายละเอียด", "Grade", "ประเภท", "กำหนดปิดงาน", "สาเหตุ", "ผู้รับผิดชอบ", "มาตรการแก้ไข", "สถานะ", "ผู้ตรวจสอบปิดงาน", "วันเวลาปิดงาน"];
+  const headers = ["No", "ประเภทการตรวจ", "วันที่ตรวจ", "หน่วยงาน", "จุดที่พบ", "รายละเอียด", "Grade", "ประเภท", "รูปก่อน", "กำหนดปิดงาน", "สาเหตุ", "ผู้รับผิดชอบ", "มาตรการแก้ไข", "รูปหลัง", "สถานะ", "ผู้ตรวจสอบปิดงาน", "วันเวลาปิดงาน"];
   const rows = list.map((f, i) => [
-    i + 1, f.TypeOfAudit, f.PatrolDate, f.Shop, f.Place, f.Description, f.Grade, f.Category, f.DueDate,
-    f.RootCause, f.ActionResponsible, f.Countermeasure, f.Status, f.VerifiedBy,
+    i + 1, f.TypeOfAudit, f.PatrolDate, f.Shop, f.Place, f.Description, f.Grade, f.Category, f.PhotoBeforeUrl, f.DueDate,
+    f.RootCause, f.ActionResponsible, f.Countermeasure, f.PhotoAfterUrl, f.Status, f.VerifiedBy,
     f.Rules_Confirmed_DateTime ? new Date(f.Rules_Confirmed_DateTime).toLocaleString("th-TH") : "",
   ]);
   const csv = [headers, ...rows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -1831,6 +1834,11 @@ function reportFilteredRows() {
   return findings.filter(r => (!month || r.PatrolDate.slice(0, 7) === month) && (!shop || r.Shop === shop))
     .sort((a, b) => a.PatrolDate.localeCompare(b.PatrolDate) || a.Id - b.Id);
 }
+function reportPhotoCell(urls) {
+  const list = splitPhotoUrls(urls);
+  if (!list.length) return '<span style="color:var(--muted)">-</span>';
+  return `<div class="rtbl-photos">${list.map(u => `<a href="${u}" target="_blank" rel="noopener"><img src="${u}"></a>`).join("")}</div>`;
+}
 function renderReport() {
   const months = [...new Set(findings.map(r => r.PatrolDate.slice(0, 7)))].sort().reverse();
   fillSelectOnce("rptMonth", months);
@@ -1845,13 +1853,15 @@ function renderReport() {
       <div style="font-size:11px;color:var(--muted);">รอบรายงาน: ${monthLabel}${document.getElementById("rptShop").value ? " · Shop: " + document.getElementById("rptShop").value : ""}</div>
     </div>
     <table class="rtbl">
-      <thead><tr><th>No</th><th>Shop</th><th>Place</th><th>Description</th><th>Grade</th><th>STD</th><th>Due Date</th><th>Root cause</th><th>Action/Responsible</th><th>Countermeasure</th><th>Status</th></tr></thead>
+      <thead><tr><th>No</th><th>Shop</th><th>Place</th><th>Description</th><th>Grade</th><th>STD</th><th>Due Date</th><th>รูปก่อน</th><th>Root cause</th><th>Action/Responsible</th><th>Countermeasure</th><th>รูปหลัง</th><th>Status</th></tr></thead>
       <tbody>
         ${rows.map((r, i) => `<tr>
           <td>${i + 1}</td><td>${r.Shop}</td><td>${r.Place || "-"}</td><td>${escapeHtml(r.Description)}</td>
           <td>${r.Grade}</td><td>${r.Category || "-"}</td><td>${fmtDate(r.DueDate)}</td>
+          <td>${reportPhotoCell(r.PhotoBeforeUrl)}</td>
           <td>${escapeHtml(r.RootCause) || "-"}</td><td>${escapeHtml(r.ActionResponsible) || "-"}</td>
-          <td>${escapeHtml(r.Countermeasure) || "-"}</td><td>${r.Status}</td>
+          <td>${escapeHtml(r.Countermeasure) || "-"}</td>
+          <td>${reportPhotoCell(r.PhotoAfterUrl)}</td><td>${r.Status}</td>
         </tr>`).join("")}
       </tbody>
     </table>
