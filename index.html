@@ -657,7 +657,7 @@ const APP_CONFIG = {
 };
 const LIVE = !!APP_CONFIG.API_URL;
 
-async function apiCall(action, payload = {}) {
+async function apiCallOnce(action, payload) {
   // Content-Type: text/plain (ไม่ใช่ application/json) กัน browser ยิง CORS preflight (OPTIONS)
   // ซึ่ง Google Apps Script Web App ไม่รองรับ — ฝั่ง doPost() ยัง parse เนื้อหาเป็น JSON ตามปกติ
   const res = await fetch(APP_CONFIG.API_URL, {
@@ -665,10 +665,36 @@ async function apiCall(action, payload = {}) {
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify({ action, token: APP_CONFIG.API_TOKEN, ...payload }),
   });
-  if (!res.ok) throw new Error(`API ${res.status}: ${res.statusText}`);
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || "เกิดข้อผิดพลาดจาก API");
+  if (!res.ok) {
+    const err = new Error(`API ${res.status}: ${res.statusText}`);
+    err.transient = true; // HTTP-level ผิดพลาด (404/500 ฯลฯ) — เป็นอาการหลุดชั่วคราวของ Apps Script ที่พบได้บ่อย ลองใหม่ได้
+    throw err;
+  }
+  let json;
+  try {
+    json = await res.json();
+  } catch (e) {
+    const err = new Error("เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง (ไม่ใช่ JSON) — น่าจะเป็นอาการหลุดชั่วคราวของ Google");
+    err.transient = true; // เช่นได้ข้อความ plain-text "API is running..." กลับมาแทน JSON
+    throw err;
+  }
+  if (!json.ok) throw new Error(json.error || "เกิดข้อผิดพลาดจาก API"); // error จริงจากแอป (เช่น รหัสผ่านผิด) ไม่ต้อง retry
   return json.data;
+}
+
+// การเชื่อมต่อ Google Apps Script Web App มีอาการหลุด/error ชั่วคราวได้บ่อย (ธรรมชาติของแพลตฟอร์ม
+// ไม่ใช่บั๊กโค้ดเรา) — ลองใหม่อัตโนมัติก่อนโชว์ error ให้ผู้ใช้เห็น กันต้องกดปุ่มซ้ำเองทุกครั้งที่หลุด
+const API_RETRY_DELAYS_MS = [800, 1800];
+async function apiCall(action, payload = {}) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await apiCallOnce(action, payload);
+    } catch (err) {
+      const isTransient = err.transient || err instanceof TypeError; // TypeError = fetch() เองล้มเหลว (เน็ตหลุด/DNS)
+      if (!isTransient || attempt >= API_RETRY_DELAYS_MS.length) throw err;
+      await new Promise(r => setTimeout(r, API_RETRY_DELAYS_MS[attempt]));
+    }
+  }
 }
 
 function fileToBase64(file) {
@@ -2152,14 +2178,18 @@ async function showApp() {
   document.getElementById("storageNote").textContent = SheAPI.LIVE
     ? "เชื่อมต่อ Google Sheets จริง — ข้อมูลนี้ share กับทุกคนที่ใช้ระบบ ไม่ว่าจะมีบัญชี Microsoft 365 หรือไม่"
     : "Demo Mode — ข้อมูลเก็บใน browser นี้เท่านั้น ยังไม่ share ข้ามเครื่อง จนกว่าจะเชื่อมต่อ Google Sheets จริง";
+  // listSettings กับ listFindings ไม่ได้ขึ้นต่อกัน — ยิงพร้อมกันแทนที่จะรอทีละอัน ลดเวลาโหลดครั้งแรกลง
+  // ได้เกือบครึ่ง (โดยเฉพาะบน Apps Script ที่แต่ละ call มี latency ของตัวเองอยู่แล้ว)
+  let loadFindingsError = null;
+  const findingsPromise = loadFindings().catch(err => { loadFindingsError = err; });
   await refreshDynamicOptions();
   if (currentRoles().includes("dept") && u.Shop) document.getElementById("filterShop").value = u.Shop;
-  try {
-    await loadFindings();
+  await findingsPromise;
+  if (loadFindingsError) {
+    document.getElementById("listContainer").innerHTML = `<div class="empty">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(loadFindingsError.message)}<br><button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="location.reload()">ลองใหม่</button></div>`;
+  } else {
     renderList();
     maybeOpenDeepLink();
-  } catch (err) {
-    document.getElementById("listContainer").innerHTML = `<div class="empty">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(err.message)}<br><button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="location.reload()">ลองใหม่</button></div>`;
   }
 }
 
