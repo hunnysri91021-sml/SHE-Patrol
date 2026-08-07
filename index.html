@@ -245,7 +245,7 @@
   .users-table{width:100%;border-collapse:collapse;font-size:13.5px;}
   .users-table th{text-align:left;color:var(--muted);font-weight:600;padding:9px 10px;border-bottom:2px solid var(--border);}
   .users-table td{padding:9px 10px;border-bottom:1px solid var(--border);}
-  .role-badge{padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700;white-space:nowrap;}
+  .role-badge{display:inline-block;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700;white-space:nowrap;margin:2px 3px 2px 0;}
   .role-badge.auditor{background:var(--navy-pale);color:var(--navy);}
   .role-badge.dept{background:var(--orange-pale);color:var(--orange);}
   .role-badge.admin{background:var(--accent-pale);color:var(--accent);}
@@ -588,13 +588,13 @@
     <div class="modal-body">
       <div class="field"><label>ชื่อ-นามสกุล *</label><input type="text" id="u_name" placeholder="เช่น สมชาย ใจดี"></div>
       <div class="field"><label>อีเมล *</label><input type="email" id="u_email" placeholder="name@sml.co.th"></div>
-      <div class="field"><label>บทบาท (Role) *</label>
-        <select id="u_role">
-          <option value="SHE-Auditor">SHE-Auditor — ผู้ตรวจ</option>
-          <option value="SHE-Dept-Responsible">SHE-Dept-Responsible — หน่วยงานรับผิดชอบ</option>
-          <option value="SHE-Safety-Admin">SHE-Safety-Admin — Safety Admin</option>
-          <option value="SHE-Executive-Viewer">SHE-Executive-Viewer — ผู้บริหาร (ดูอย่างเดียว)</option>
-        </select>
+      <div class="field"><label>บทบาท (Role) * — เลือกได้มากกว่า 1 บทบาท</label>
+        <div id="u_roleChecks" style="display:flex;flex-direction:column;gap:6px;">
+          <label style="font-weight:400;"><input type="checkbox" class="u_role_cb" value="SHE-Auditor" style="width:auto;"> SHE-Auditor — ผู้ตรวจ</label>
+          <label style="font-weight:400;"><input type="checkbox" class="u_role_cb" value="SHE-Dept-Responsible" style="width:auto;"> SHE-Dept-Responsible — หน่วยงานรับผิดชอบ</label>
+          <label style="font-weight:400;"><input type="checkbox" class="u_role_cb" value="SHE-Safety-Admin" style="width:auto;"> SHE-Safety-Admin — Safety Admin</label>
+          <label style="font-weight:400;"><input type="checkbox" class="u_role_cb" value="SHE-Executive-Viewer" style="width:auto;"> SHE-Executive-Viewer — ผู้บริหาร (ดูอย่างเดียว)</label>
+        </div>
       </div>
       <div class="field" id="u_shopField" style="display:none;"><label>Shop ที่รับผิดชอบ</label>
         <select id="u_shop">
@@ -1096,26 +1096,45 @@ const SheSettingsAPI = (function () {
 /* ======================================================================
  * Role helpers, session (login) — Admin assigns Role/Shop via SHE_Patrol_Users,
  * the signed-in user only picks WHO they are, never their own role.
+ *
+ * ผู้ใช้ 1 คนมีได้หลายบทบาทพร้อมกัน — คอลัมน์ Role เก็บเป็นรายการคั่นด้วยจุลภาค
+ * (เช่น "SHE-Auditor,SHE-Safety-Admin") แบบเดียวกับ Shop_Options/Category_Options
+ * สิทธิ์ที่ได้คือ "รวม" ของทุกบทบาทที่มี (มีบทบาทไหนให้สิทธิ์อะไร ก็ได้สิทธิ์นั้น)
+ * ไม่ใช่การเลือกบทบาทใดบทบาทหนึ่งมา "ทับ" บทบาทอื่น — ค่าเดิมที่มีแค่บทบาทเดียว
+ * (ไม่มีจุลภาค) ยังใช้ได้ปกติ ถือเป็นรายการที่มีสมาชิกตัวเดียว
  * ====================================================================== */
 const ROLE_MAP = { "SHE-Auditor": "auditor", "SHE-Dept-Responsible": "dept", "SHE-Safety-Admin": "admin", "SHE-Executive-Viewer": "exec" };
 const ROLE_LABELS = { auditor: "ผู้ตรวจ", dept: "หน่วยงานรับผิดชอบ", admin: "Safety Admin", exec: "ผู้บริหาร" };
+// ลำดับความสำคัญไว้ใช้ตอนต้องเลือกโชว์ label เดียว (เช่น ป้ายชื่อมุมขวาบน)
+const ROLE_PRIORITY = ["admin", "auditor", "dept", "exec"];
 function roleShortCode(fullRole) { return ROLE_MAP[fullRole] || "exec"; }
+function roleShortCodes(fullRoleList) {
+  const codes = (fullRoleList || "").split(",").map(s => s.trim()).filter(Boolean).map(roleShortCode);
+  return codes.length ? [...new Set(codes)] : ["exec"];
+}
+function primaryRoleCode(fullRoleList) {
+  const codes = roleShortCodes(fullRoleList);
+  return ROLE_PRIORITY.find(r => codes.includes(r)) || codes[0];
+}
+function roleLabelsText(fullRoleList) {
+  return roleShortCodes(fullRoleList).map(r => ROLE_LABELS[r]).join(" + ");
+}
 
 const SESSION_KEY = "she_patrol_current_user";
 function getCurrentUser() { try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)); } catch (e) { return null; } }
 function setCurrentUser(u) { sessionStorage.setItem(SESSION_KEY, JSON.stringify(u)); }
 function clearCurrentUser() { sessionStorage.removeItem(SESSION_KEY); }
-function currentRole() { const u = getCurrentUser(); return u ? roleShortCode(u.Role) : "exec"; }
-function canCreate() { return ["auditor", "admin"].includes(currentRole()); }
+function currentRoles() { const u = getCurrentUser(); return roleShortCodes(u ? u.Role : ""); }
+function canCreate() { return currentRoles().some(r => r === "auditor" || r === "admin"); }
 function canEditProgress(f) {
-  const r = currentRole();
-  if (r === "admin" || r === "auditor") return true;
-  if (r === "dept") { const u = getCurrentUser(); return !!(u && u.Shop && u.Shop === f.Shop); }
+  const roles = currentRoles();
+  if (roles.includes("admin") || roles.includes("auditor")) return true;
+  if (roles.includes("dept")) { const u = getCurrentUser(); return !!(u && u.Shop && u.Shop === f.Shop); }
   return false;
 }
-function canEditDetails() { return currentRole() === "admin"; }
-function canClose() { return currentRole() === "admin"; }
-function canManageUsers() { return currentRole() === "admin"; }
+function canEditDetails() { return currentRoles().includes("admin"); }
+function canClose() { return currentRoles().includes("admin"); }
+function canManageUsers() { return currentRoles().includes("admin"); }
 
 /* ======================================================================
  * Utils
@@ -1886,11 +1905,11 @@ async function renderUsersTable() {
       <thead><tr><th>ชื่อ</th><th>อีเมล</th><th>บทบาท</th><th>Shop</th><th>สถานะ</th><th></th></tr></thead>
       <tbody>
         ${users.map(u => {
-          const code = roleShortCode(u.Role);
+          const codes = roleShortCodes(u.Role);
           return `<tr>
             <td>${escapeHtml(u.Name)}</td>
             <td>${escapeHtml(u.Email)}</td>
-            <td><span class="role-badge ${code}">${ROLE_LABELS[code]}</span></td>
+            <td>${codes.map(code => `<span class="role-badge ${code}">${ROLE_LABELS[code]}</span>`).join(" ")}</td>
             <td>${u.Shop || "-"}</td>
             <td><span class="active-dot ${u.Active ? "" : "off"}"></span> ${u.Active ? "ใช้งาน" : "ปิดใช้งาน"}</td>
             <td><button class="btn btn-ghost btn-sm" data-edit-user="${u.Id}">แก้ไข</button></td>
@@ -1909,10 +1928,13 @@ async function renderUsersTable() {
 }
 
 let editingUserId = null;
-function toggleShopField() {
-  document.getElementById("u_shopField").style.display = document.getElementById("u_role").value === "SHE-Dept-Responsible" ? "block" : "none";
+function checkedRoleValues() {
+  return Array.from(document.querySelectorAll(".u_role_cb:checked")).map(cb => cb.value);
 }
-document.getElementById("u_role").addEventListener("change", toggleShopField);
+function toggleShopField() {
+  document.getElementById("u_shopField").style.display = checkedRoleValues().includes("SHE-Dept-Responsible") ? "block" : "none";
+}
+document.querySelectorAll(".u_role_cb").forEach(cb => cb.addEventListener("change", toggleShopField));
 
 async function openUserModal(u) {
   await refreshDynamicOptions();
@@ -1920,7 +1942,8 @@ async function openUserModal(u) {
   document.getElementById("userModalTitle").textContent = u ? "แก้ไขผู้ใช้งาน" : "เพิ่มผู้ใช้งาน";
   document.getElementById("u_name").value = u ? u.Name : "";
   document.getElementById("u_email").value = u ? u.Email : "";
-  document.getElementById("u_role").value = u ? u.Role : "SHE-Auditor";
+  const selectedRoles = u ? (u.Role || "").split(",").map(s => s.trim()) : ["SHE-Auditor"];
+  document.querySelectorAll(".u_role_cb").forEach(cb => { cb.checked = selectedRoles.includes(cb.value); });
   document.getElementById("u_shop").value = u ? u.Shop || "" : "";
   document.getElementById("u_active").checked = u ? !!u.Active : true;
   document.getElementById("u_password").value = "";
@@ -1932,16 +1955,17 @@ document.getElementById("newUserBtn").addEventListener("click", () => openUserMo
 document.getElementById("saveUserBtn").addEventListener("click", async () => {
   const name = document.getElementById("u_name").value.trim();
   const email = document.getElementById("u_email").value.trim();
-  const role = document.getElementById("u_role").value;
-  const shop = role === "SHE-Dept-Responsible" ? document.getElementById("u_shop").value : "";
+  const roles = checkedRoleValues();
+  const shop = roles.includes("SHE-Dept-Responsible") ? document.getElementById("u_shop").value : "";
   const active = document.getElementById("u_active").checked;
   const password = document.getElementById("u_password").value;
   if (!name || !email) { alert("กรุณากรอกชื่อและอีเมล"); return; }
+  if (!roles.length) { alert("กรุณาเลือกอย่างน้อย 1 บทบาท"); return; }
   if (!editingUserId && !password) { alert("กรุณาตั้งรหัสผ่านสำหรับผู้ใช้งานใหม่"); return; }
   const btn = document.getElementById("saveUserBtn");
   btn.disabled = true; btn.textContent = "กำลังบันทึก...";
   try {
-    const fields = { Name: name, Email: email, Role: role, Shop: shop, Active: active };
+    const fields = { Name: name, Email: email, Role: roles.join(","), Shop: shop, Active: active };
     if (password) fields.Password = password;
     if (editingUserId) await SheUsersAPI.update(editingUserId, fields);
     else await SheUsersAPI.create(fields);
@@ -2082,7 +2106,7 @@ async function populateLoginSelect() {
   }
   const active = loginUsersCache.filter(u => u.Active);
   if (!active.length) { sel.innerHTML = '<option value="">— ยังไม่มีผู้ใช้งาน ติดต่อ Safety Admin —</option>'; return; }
-  sel.innerHTML = active.map(u => `<option value="${u.Id}">${escapeHtml(u.Name)} — ${ROLE_LABELS[roleShortCode(u.Role)]}</option>`).join("");
+  sel.innerHTML = active.map(u => `<option value="${u.Id}">${escapeHtml(u.Name)} — ${roleLabelsText(u.Role)}</option>`).join("");
 }
 document.getElementById("loginBtn").addEventListener("click", async () => {
   const id = document.getElementById("loginUserSelect").value;
@@ -2118,7 +2142,7 @@ async function showApp() {
   document.getElementById("loginScreen").style.display = "none";
   document.getElementById("appShell").style.display = "block";
   document.getElementById("userChipName").textContent = u.Name;
-  document.getElementById("userChipRole").textContent = ROLE_LABELS[roleShortCode(u.Role)];
+  document.getElementById("userChipRole").textContent = roleLabelsText(u.Role);
   if (canManageUsers()) {
     document.getElementById("adminTabBtn").style.display = "";
     document.getElementById("settingsTabBtn").style.display = "";
@@ -2129,7 +2153,7 @@ async function showApp() {
     ? "เชื่อมต่อ Google Sheets จริง — ข้อมูลนี้ share กับทุกคนที่ใช้ระบบ ไม่ว่าจะมีบัญชี Microsoft 365 หรือไม่"
     : "Demo Mode — ข้อมูลเก็บใน browser นี้เท่านั้น ยังไม่ share ข้ามเครื่อง จนกว่าจะเชื่อมต่อ Google Sheets จริง";
   await refreshDynamicOptions();
-  if (currentRole() === "dept" && u.Shop) document.getElementById("filterShop").value = u.Shop;
+  if (currentRoles().includes("dept") && u.Shop) document.getElementById("filterShop").value = u.Shop;
   try {
     await loadFindings();
     renderList();
