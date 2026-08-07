@@ -972,7 +972,7 @@ const SheAPI = (function () {
         return liveCreate(fields, photos);
       }
       const dataUrls = await Promise.all(files.map(f => demoUploadPhoto(f)));
-      return demoCreate({ ...fields, PhotoBeforeUrl: dataUrls.join(",") });
+      return demoCreate({ ...fields, PhotoBeforeUrl: joinPhotoUrls(dataUrls) });
     },
     // photos: { before: File[], after: File[] } — รูปใหม่จะต่อท้ายรูปเดิมของรายการนั้น ไม่แทนที่
     async update(id, fields, photos) {
@@ -991,11 +991,11 @@ const SheAPI = (function () {
       const extraFields = { ...fields };
       if (before.length) {
         const newUrls = await Promise.all(before.map(f => demoUploadPhoto(f)));
-        extraFields.PhotoBeforeUrl = [current.PhotoBeforeUrl, ...newUrls].filter(Boolean).join(",");
+        extraFields.PhotoBeforeUrl = joinPhotoUrls([...splitPhotoUrls(current.PhotoBeforeUrl), ...newUrls]);
       }
       if (after.length) {
         const newUrls = await Promise.all(after.map(f => demoUploadPhoto(f)));
-        extraFields.PhotoAfterUrl = [current.PhotoAfterUrl, ...newUrls].filter(Boolean).join(",");
+        extraFields.PhotoAfterUrl = joinPhotoUrls([...splitPhotoUrls(current.PhotoAfterUrl), ...newUrls]);
       }
       return demoUpdate(id, extraFields);
     },
@@ -1235,12 +1235,42 @@ function renderPendingPhotoThumbs(containerEl, files, onRemove) {
 
 // รูปที่บันทึกไปแล้ว (คั่นด้วยจุลภาคในคอลัมน์ PhotoBeforeUrl/PhotoAfterUrl) — ต่อท้ายรูปใหม่เข้าไป
 // เรื่อยๆ ไม่ได้แทนที่ของเดิม
+// Demo mode stores raw data: URLs (data:image/jpeg;base64,<payload>), which contain a
+// comma of their own — so each one is percent-encoded before joining, keeping the
+// top-level "," the only real separator. Live mode's Drive URLs never contain a comma,
+// so they're left exactly as the backend sends/expects them (no encode/decode there).
 function splitPhotoUrls(value) {
-  return (value || "").split(",").map(s => s.trim()).filter(Boolean);
+  const parts = (value || "").split(",").map(s => s.trim()).filter(Boolean);
+  if (SheAPI.LIVE) return parts;
+  return parts.map(p => { try { return decodeURIComponent(p); } catch { return p; } });
 }
-function renderSavedPhotoThumbs(urls) {
+function joinPhotoUrls(urls) {
+  const list = (urls || []).filter(Boolean);
+  return SheAPI.LIVE ? list.join(",") : list.map(u => encodeURIComponent(u)).join(",");
+}
+function renderSavedPhotoThumbs(urls, removableField) {
   if (!urls.length) return '<span style="color:var(--muted)">ไม่มีรูป</span>';
-  return `<div class="photo-thumbs">${urls.map(u => `<a href="${u}" target="_blank" rel="noopener"><img src="${u}"></a>`).join("")}</div>`;
+  return `<div class="photo-thumbs">${urls.map(u => `
+    <div class="photo-thumb-pending">
+      <a href="${u}" target="_blank" rel="noopener"><img src="${u}"></a>
+      ${removableField ? `<button type="button" class="rm" data-field="${removableField}" data-url="${escapeHtml(u)}" title="ลบรูปนี้">✕</button>` : ""}
+    </div>
+  `).join("")}</div>`;
+}
+
+async function removeSavedPhoto(id, field, url) {
+  if (!confirm('ลบรูปนี้ออกจากรายการหรือไม่? (ไฟล์ใน Google Drive จะยังอยู่ แค่เอาออกจากรายการนี้เท่านั้น)')) return;
+  const f = findings.find(x => String(x.Id) === String(id));
+  if (!f) return;
+  const remaining = joinPhotoUrls(splitPhotoUrls(f[field]).filter(u => u !== url));
+  try {
+    const updated = await SheAPI.update(f.Id, { [field]: remaining });
+    upsertFindingLocal(updated);
+    renderList();
+    openDetail(id);
+  } catch (err) {
+    alert("เกิดข้อผิดพลาด: " + err.message);
+  }
 }
 
 async function loadFindings() { findings = await SheAPI.list(); }
@@ -1493,7 +1523,7 @@ async function openDetail(id) {
     <div class="detail-row"><div class="k">กำหนดปิดงาน</div><div class="v">${fmtDate(f.DueDate)} ${overdue ? '<span class="overdue-tag">เลยกำหนด</span>' : ""}</div></div>
     <div class="detail-row"><div class="k">สถานะ</div><div class="v"><span class="badge st-${f.Status}">${f.Status}</span></div></div>
     <div class="detail-row"><div class="k">รูปสภาพที่พบ</div><div class="v">
-      ${renderSavedPhotoThumbs(splitPhotoUrls(beforeSrc))}
+      ${renderSavedPhotoThumbs(splitPhotoUrls(beforeSrc), editable ? "PhotoBeforeUrl" : null)}
       ${editable ? `
         <div class="photo-box" style="margin-top:8px;">
           <input type="file" accept="image/*" multiple id="d_photoBefore">
@@ -1509,7 +1539,7 @@ async function openDetail(id) {
       <div class="field full"><label>ผู้รับผิดชอบดำเนินการ</label><input type="text" id="d_actionResponsible" value="${escapeHtml(f.ActionResponsible)}"></div>
       <div class="field full"><label>มาตรการแก้ไข (Countermeasure)</label><textarea id="d_countermeasure" rows="2">${escapeHtml(f.Countermeasure)}</textarea></div>
       <div class="field full"><label>รูปหลังแก้ไข</label>
-        ${renderSavedPhotoThumbs(splitPhotoUrls(afterSrc))}
+        ${renderSavedPhotoThumbs(splitPhotoUrls(afterSrc), "PhotoAfterUrl")}
         <div class="photo-box" style="margin-top:8px;">
           <input type="file" accept="image/*" multiple id="d_photoAfter">
           <div class="photo-count-hint">แนบเพิ่มได้สูงสุด ${MAX_PHOTOS_PER_STAGE} รูปต่อครั้ง (จะต่อท้ายรูปเดิม ไม่ได้แทนที่)</div>
@@ -1543,6 +1573,9 @@ async function openDetail(id) {
   }
 
   if (editable) {
+    document.querySelectorAll("#detailBody .rm[data-field]").forEach(btn => {
+      btn.addEventListener("click", () => removeSavedPhoto(f.Id, btn.dataset.field, btn.dataset.url));
+    });
     const refreshDBeforeThumbs = () => renderPendingPhotoThumbs(document.getElementById("d_photoBeforeThumbs"), pendingPhotoBeforeFiles, i => {
       pendingPhotoBeforeFiles.splice(i, 1);
       refreshDBeforeThumbs();
