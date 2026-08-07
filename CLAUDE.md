@@ -95,12 +95,48 @@ Both were driven with Playwright, including request/response inspection to
 verify things like "exactly one API call fires per save" rather than
 guessing from the UI alone.
 
+## Session tokens (real per-login auth, not just API_TOKEN)
+
+`API_TOKEN` (above) is a static, publicly-visible gate — it stops casual
+scraping but not a reader of the JS. Real access control is a **session
+token** issued by `login_()` on successful password check and required by
+`doPost()` for every action except `login`/`loginOptions`/`ping`:
+
+- Format: `userId|expiryEpochMs|hmacHex`, signed with `SESSION_SECRET` — a
+  random value generated once via `PropertiesService` on first use and never
+  present in code, git, or any client response. Verify with
+  `verifySessionToken_()`; it also re-checks the user is still `Active` in
+  the Users sheet on every call (not just at login), so deactivating someone
+  takes effect immediately, not just at their next login.
+- TTL: 24h. Client stores the token as `SessionToken` on the user object in
+  `sessionStorage` and `apiCallOnce()` attaches it automatically. A
+  `sessionExpired: true` response makes the client clear the session and
+  reload to the login screen — this is not retried (retrying a bad token
+  never succeeds).
+- **Role checks are re-verified server-side**, not trusted from the client:
+  `requireRole_()` for admin-only actions (createUser/updateUser/
+  updateSettings/createFinding needs admin-or-auditor), and
+  `requireCanEditFinding_()` mirrors the client's `canEditProgress()`/
+  `canEditDetails()` exactly — original-detail fields and closing a finding
+  (`Status: "ปิดงาน"`) are admin-only, dept role is shop-scoped — enforced
+  even if someone calls `apiCall()` straight from devtools, bypassing the UI
+  entirely. This was verified with a mock backend implementing the identical
+  contract: an auditor's direct `apiCall('updateFinding', {fields:{Place:...}})`
+  is rejected, `RootCause` on the same finding is accepted, a dept user
+  editing another shop's finding is rejected, and a tampered token is
+  rejected and forces logout.
+- `loginOptions` (unauthenticated, used only by the login screen's name
+  picker) intentionally returns just `{Id, Name, Role}` — no Email/Shop —
+  to avoid leaking that PII pre-login. The old `listUsers` (full user list,
+  used post-login by the admin screen) is now only reachable with a valid
+  session.
+
 ## Security/PDPA posture (see README.md for full detail)
 
 - Passwords: SHA-256 hashed (unsalted), never returned to the client.
-- The API_TOKEN is the only gate on the Apps Script endpoint — there is no
-  per-session/per-user server-side auth beyond it. This was a conscious,
-  documented tradeoff, not an oversight.
+- API_TOKEN + session token together gate the API now (see above) — a
+  reader of the public JS can see API_TOKEN but still can't call anything
+  beyond login/loginOptions/ping without actually authenticating.
 - Both this repo and the sibling `Safety-WorkPermit` repo are **public** on
   GitHub. Don't assume anything in either repo is private, including this
   file.

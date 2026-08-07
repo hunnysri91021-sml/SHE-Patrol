@@ -279,19 +279,40 @@ function doPost(e) {
     return jsonResponse({ ok: false, error: "ไม่ได้รับอนุญาต" });
   }
 
+  // ทุก action ยกเว้น 3 ตัวนี้ต้องมี session token ที่ยังไม่หมดอายุ (ออกให้ตอน login_() สำเร็จ) —
+  // ป้องกันไม่ให้ใครก็ตามที่รู้แค่ API_TOKEN (ซึ่งฝังอยู่ใน index.html แบบสาธารณะ) เรียกข้อมูลจริง
+  // ได้โดยไม่เคย login เลย — session token เซ็นด้วย secret ฝั่งเซิร์ฟเวอร์ที่ไม่เคยส่งให้ client
+  const PUBLIC_ACTIONS_ = ["login", "loginOptions", "ping"];
+  let sessionUser = null;
+  if (PUBLIC_ACTIONS_.indexOf(data.action) === -1) {
+    sessionUser = verifySessionToken_(data.sessionToken);
+    if (!sessionUser) return jsonResponse({ ok: false, error: "เซสชันหมดอายุ กรุณาล็อกอินใหม่", sessionExpired: true });
+  }
+
   try {
     switch (data.action) {
       case "listFindings": return jsonResponse({ ok: true, data: listFindings_() });
       case "getFinding": return jsonResponse({ ok: true, data: getFinding_(data.id) });
-      case "createFinding": return jsonResponse({ ok: true, data: createFinding_(data.fields || {}, data.photos) });
-      case "updateFinding": return jsonResponse({ ok: true, data: updateFinding_(data.id, data.fields || {}, data.photos) });
+      case "createFinding":
+        requireRole_(sessionUser, ["admin", "auditor"]);
+        return jsonResponse({ ok: true, data: createFinding_(data.fields || {}, data.photos) });
+      case "updateFinding":
+        requireCanEditFinding_(sessionUser, data.id, data.fields || {});
+        return jsonResponse({ ok: true, data: updateFinding_(data.id, data.fields || {}, data.photos) });
       case "listUsers": return jsonResponse({ ok: true, data: listUsers_() });
-      case "createUser": return jsonResponse({ ok: true, data: createUser_(data.fields || {}) });
-      case "updateUser": return jsonResponse({ ok: true, data: updateUser_(data.id, data.fields || {}) });
+      case "createUser":
+        requireRole_(sessionUser, ["admin"]);
+        return jsonResponse({ ok: true, data: createUser_(data.fields || {}) });
+      case "updateUser":
+        requireRole_(sessionUser, ["admin"]);
+        return jsonResponse({ ok: true, data: updateUser_(data.id, data.fields || {}) });
       case "login": return jsonResponse({ ok: true, data: login_(data.id, data.password) });
+      case "loginOptions": return jsonResponse({ ok: true, data: loginOptions_() });
       case "uploadPhoto": return jsonResponse({ ok: true, data: uploadPhoto_(data.findingId, data.stage, data.fileName, data.contentBase64) });
       case "listSettings": return jsonResponse({ ok: true, data: listSettings_() });
-      case "updateSettings": return jsonResponse({ ok: true, data: updateSettings_(data.values || {}) });
+      case "updateSettings":
+        requireRole_(sessionUser, ["admin"]);
+        return jsonResponse({ ok: true, data: updateSettings_(data.values || {}) });
       case "ping": return jsonResponse({ ok: true, data: ping_() });
       default: return jsonResponse({ ok: false, error: "ไม่รู้จัก action: " + data.action });
     }
@@ -442,13 +463,95 @@ function listUsers_() {
   return readAllRows_(USERS_SHEET_NAME, USERS_HEADERS).map(sanitizeUser_);
 }
 
+// เฉพาะไว้แสดงในหน้า login (เลือกชื่อตัวเอง) — เรียกได้ก่อน login เสมอ ตัด Email/Shop
+// ออกเพราะไม่จำเป็นสำหรับหน้านี้ และเป็น PII ที่ไม่ควรให้ดึงได้ก่อนยืนยันตัวตน
+function loginOptions_() {
+  return readAllRows_(USERS_SHEET_NAME, USERS_HEADERS)
+    .filter(u => u.Active)
+    .map(u => ({ Id: u.Id, Name: u.Name, Role: u.Role, Active: true }));
+}
+
+// ---------------------------------------------------------------
+// Session token — เซ็นด้วย secret ที่สุ่มครั้งแรกที่ใช้งานและเก็บใน Script Properties
+// (ไม่เคยอยู่ในโค้ด/ไม่เคยส่งให้ client) ต่างจาก API_TOKEN ที่ฝังอยู่ใน index.html แบบเปิดเผย —
+// ตัวนี้ออกให้เฉพาะตอน login สำเร็จเท่านั้น และ doPost() บังคับเช็คทุก action ที่ไม่ใช่
+// login/loginOptions/ping ก่อนทำงาน เป็นการป้องกันระดับ API จริง ไม่ใช่แค่กันบอท
+// ---------------------------------------------------------------
+const SESSION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000; // หมดอายุใน 24 ชม. ต้อง login ใหม่
+
+function getSessionSecret_() {
+  const props = PropertiesService.getScriptProperties();
+  let secret = props.getProperty("SESSION_SECRET");
+  if (!secret) {
+    secret = Utilities.getUuid() + Utilities.getUuid();
+    props.setProperty("SESSION_SECRET", secret);
+  }
+  return secret;
+}
+
+function signSessionPayload_(payload) {
+  const bytes = Utilities.computeHmacSha256Signature(payload, getSessionSecret_());
+  return bytes.map(b => ((b < 0 ? b + 256 : b).toString(16)).padStart(2, "0")).join("");
+}
+
+function issueSessionToken_(userId) {
+  const payload = userId + "|" + (Date.now() + SESSION_TOKEN_TTL_MS);
+  return payload + "|" + signSessionPayload_(payload);
+}
+
+// คืน user (sanitize แล้ว) ถ้า token ถูกต้อง/ยังไม่หมดอายุ/บัญชียังใช้งานอยู่ — ไม่งั้นคืน null
+function verifySessionToken_(token) {
+  if (!token || typeof token !== "string") return null;
+  const parts = token.split("|");
+  if (parts.length !== 3) return null;
+  const payload = parts[0] + "|" + parts[1];
+  if (signSessionPayload_(payload) !== parts[2]) return null;
+  const exp = Number(parts[1]);
+  if (!exp || Date.now() > exp) return null;
+  const userId = Number(parts[0]);
+  const row = readAllRows_(USERS_SHEET_NAME, USERS_HEADERS).find(r => r.Id === userId);
+  if (!row || !row.Active) return null;
+  return sanitizeUser_(row);
+}
+
+const ROLE_CODE_MAP_ = { "SHE-Auditor": "auditor", "SHE-Dept-Responsible": "dept", "SHE-Safety-Admin": "admin", "SHE-Executive-Viewer": "exec" };
+function userRoleCodes_(user) {
+  return (user.Role || "").split(",").map(s => ROLE_CODE_MAP_[s.trim()]).filter(Boolean);
+}
+function requireRole_(user, allowedCodes) {
+  const codes = userRoleCodes_(user);
+  if (!allowedCodes.some(c => codes.includes(c))) throw new Error("ไม่มีสิทธิ์ทำรายการนี้");
+}
+// mirror ของ canEditProgress()/canEditDetails() ฝั่ง client — ข้อมูลเดิมของรายการ
+// (TypeOfAudit/PatrolDate/Shop/Place/Description/Grade/Category) แก้ได้เฉพาะ Admin,
+// ฟิลด์ความคืบหน้าที่เหลือแก้ได้ทั้ง Admin/Auditor/หน่วยงานที่ตรง Shop ของตัวเอง,
+// และปิดงาน (Status: "ปิดงาน") ทำได้เฉพาะ Admin เท่านั้น
+function requireCanEditFinding_(user, findingId, fields) {
+  const codes = userRoleCodes_(user);
+  const detailFields = ["TypeOfAudit", "PatrolDate", "Shop", "Place", "Description", "Grade", "Category"];
+  if (Object.keys(fields).some(k => detailFields.includes(k)) && !codes.includes("admin")) {
+    throw new Error("แก้ไขข้อมูลเดิมของรายการได้เฉพาะ Admin");
+  }
+  if (fields.Status === "ปิดงาน" && !codes.includes("admin")) {
+    throw new Error("ปิดงานได้เฉพาะ Admin");
+  }
+  if (codes.includes("admin") || codes.includes("auditor")) return;
+  if (codes.includes("dept")) {
+    const finding = getFinding_(findingId);
+    if (user.Shop && user.Shop === finding.Shop) return;
+  }
+  throw new Error("ไม่มีสิทธิ์แก้ไขรายการนี้");
+}
+
 function login_(id, password) {
   const row = readAllRows_(USERS_SHEET_NAME, USERS_HEADERS).find(r => r.Id === Number(id));
   if (!row) throw new Error("ไม่พบผู้ใช้งาน");
   if (!row.Active) throw new Error("บัญชีนี้ถูกปิดใช้งาน ติดต่อ Safety Admin");
   if (!row.Password) throw new Error("บัญชีนี้ยังไม่ได้ตั้งรหัสผ่าน ติดต่อ Safety Admin ให้ตั้งรหัสผ่านก่อน");
   if (hashPassword_(password) !== row.Password) throw new Error("รหัสผ่านไม่ถูกต้อง");
-  return sanitizeUser_(row);
+  const user = sanitizeUser_(row);
+  user.SessionToken = issueSessionToken_(user.Id);
+  return user;
 }
 
 function createUser_(fields) {

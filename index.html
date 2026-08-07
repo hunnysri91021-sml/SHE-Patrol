@@ -448,6 +448,10 @@
           <label>Shop</label>
           <select id="rptShop"><option value="">ทั้งหมด</option></select>
         </div>
+        <div class="field">
+          <label>สถานะ</label>
+          <select id="rptStatus"><option value="">ทั้งหมด</option></select>
+        </div>
         <div style="flex:1"></div>
         <button class="btn btn-ghost" onclick="window.print()">🖨️ พิมพ์ / บันทึก PDF</button>
         <button class="btn btn-primary" id="rptExportBtn">⬇ ส่งออก CSV</button>
@@ -660,10 +664,11 @@ const LIVE = !!APP_CONFIG.API_URL;
 async function apiCallOnce(action, payload) {
   // Content-Type: text/plain (ไม่ใช่ application/json) กัน browser ยิง CORS preflight (OPTIONS)
   // ซึ่ง Google Apps Script Web App ไม่รองรับ — ฝั่ง doPost() ยัง parse เนื้อหาเป็น JSON ตามปกติ
+  const currentUser = getCurrentUser();
   const res = await fetch(APP_CONFIG.API_URL, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ action, token: APP_CONFIG.API_TOKEN, ...payload }),
+    body: JSON.stringify({ action, token: APP_CONFIG.API_TOKEN, sessionToken: currentUser ? currentUser.SessionToken : undefined, ...payload }),
   });
   if (!res.ok) {
     const err = new Error(`API ${res.status}: ${res.statusText}`);
@@ -678,7 +683,13 @@ async function apiCallOnce(action, payload) {
     err.transient = true; // เช่นได้ข้อความ plain-text "API is running..." กลับมาแทน JSON
     throw err;
   }
-  if (!json.ok) throw new Error(json.error || "เกิดข้อผิดพลาดจาก API"); // error จริงจากแอป (เช่น รหัสผ่านผิด) ไม่ต้อง retry
+  if (!json.ok) {
+    if (json.sessionExpired) {
+      clearCurrentUser();
+      location.reload(); // กลับไปหน้า login — เซสชันหมดอายุ/ไม่ถูกต้อง แก้ไม่ได้ด้วยการลองใหม่
+    }
+    throw new Error(json.error || "เกิดข้อผิดพลาดจาก API"); // error จริงจากแอป (เช่น รหัสผ่านผิด) ไม่ต้อง retry
+  }
   return json.data;
 }
 
@@ -1054,6 +1065,7 @@ const SheUsersAPI = (function () {
   }
 
   async function liveList() { return apiCall("listUsers"); }
+  async function liveLoginOptions() { return apiCall("loginOptions"); }
   async function liveCreate(fields) { return apiCall("createUser", { fields }); }
   async function liveUpdate(id, fields) { return apiCall("updateUser", { id: Number(id), fields }); }
   async function liveLogin(id, password) { return apiCall("login", { id: Number(id), password }); }
@@ -1061,6 +1073,8 @@ const SheUsersAPI = (function () {
   return {
     LIVE,
     async list() { return LIVE ? liveList() : demoList(); },
+    // ใช้เฉพาะหน้า login (ก่อนมี session) — ฝั่ง live ตัดฟิลด์ที่ไม่จำเป็นออกไปแล้วเพื่อลด PII ที่หลุดได้
+    async loginOptions() { return LIVE ? liveLoginOptions() : demoList(); },
     async create(fields) { return LIVE ? liveCreate(fields) : demoCreate(fields); },
     async update(id, fields) { return LIVE ? liveUpdate(id, fields) : demoUpdate(id, fields); },
     async login(id, password) { return LIVE ? liveLogin(id, password) : demoLogin(id, password); },
@@ -1876,7 +1890,8 @@ function fillSelectOnce(id, options) {
 function reportFilteredRows() {
   const month = document.getElementById("rptMonth").value;
   const shop = document.getElementById("rptShop").value;
-  return findings.filter(r => (!month || r.PatrolDate.slice(0, 7) === month) && (!shop || r.Shop === shop))
+  const status = document.getElementById("rptStatus").value;
+  return findings.filter(r => (!month || r.PatrolDate.slice(0, 7) === month) && (!shop || r.Shop === shop) && (!status || r.Status === status))
     .sort((a, b) => a.PatrolDate.localeCompare(b.PatrolDate) || a.Id - b.Id);
 }
 function reportPhotoCell(urls) {
@@ -1888,6 +1903,7 @@ function renderReport() {
   const months = [...new Set(findings.map(r => r.PatrolDate.slice(0, 7)))].sort().reverse();
   fillSelectOnce("rptMonth", months);
   fillSelectOnce("rptShop", SHOP_OPTIONS);
+  fillSelectOnce("rptStatus", STATUS_OPTIONS);
   const rows = reportFilteredRows();
   const monthLabel = document.getElementById("rptMonth").value
     ? new Date(document.getElementById("rptMonth").value + "-01").toLocaleDateString("th-TH", { year: "numeric", month: "long" })
@@ -1895,7 +1911,7 @@ function renderReport() {
   document.getElementById("reportSheet").innerHTML = `
     <div class="report-head">
       <div class="title">( SES / F-PES ) Report of findings</div>
-      <div style="font-size:11px;color:var(--muted);">รอบรายงาน: ${monthLabel}${document.getElementById("rptShop").value ? " · Shop: " + document.getElementById("rptShop").value : ""}</div>
+      <div style="font-size:11px;color:var(--muted);">รอบรายงาน: ${monthLabel}${document.getElementById("rptShop").value ? " · Shop: " + document.getElementById("rptShop").value : ""}${document.getElementById("rptStatus").value ? " · สถานะ: " + document.getElementById("rptStatus").value : ""}</div>
     </div>
     <table class="rtbl">
       <thead><tr><th>No</th><th>Shop</th><th>Place</th><th>Description</th><th>Grade</th><th>STD</th><th>Due Date</th><th>รูปก่อน</th><th>Root cause</th><th>Action/Responsible</th><th>Countermeasure</th><th>รูปหลัง</th><th>Status</th></tr></thead>
@@ -1917,7 +1933,7 @@ function renderReport() {
   `;
 }
 document.getElementById("rptExportBtn").addEventListener("click", () => exportRowsToCsv(reportFilteredRows(), `SHE_Patrol_Report_${document.getElementById("rptMonth").value || "all"}.csv`));
-["rptMonth", "rptShop"].forEach(id => document.getElementById(id).addEventListener("change", renderReport));
+["rptMonth", "rptShop", "rptStatus"].forEach(id => document.getElementById(id).addEventListener("change", renderReport));
 
 /* ======================================================================
  * Admin — manage users
@@ -2123,7 +2139,7 @@ async function populateLoginSelect() {
   sel.innerHTML = '<option value="">— กำลังโหลดรายชื่อ... —</option>';
   document.getElementById("loginMsg").textContent = "";
   try {
-    loginUsersCache = await SheUsersAPI.list();
+    loginUsersCache = await SheUsersAPI.loginOptions();
   } catch (err) {
     sel.innerHTML = '<option value="">— โหลดรายชื่อไม่สำเร็จ —</option>';
     document.getElementById("loginMsg").innerHTML = `เชื่อมต่อ API ไม่สำเร็จ: ${escapeHtml(err.message)}<br><a href="javascript:void(0)" id="retryLoginLoad">ลองใหม่</a>`;
