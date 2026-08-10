@@ -1947,10 +1947,10 @@ function renderReport() {
       <div style="font-size:11px;color:var(--muted);">รอบรายงาน: ${monthLabel}${document.getElementById("rptShop").value ? " · Shop: " + document.getElementById("rptShop").value : ""}${document.getElementById("rptStatus").value ? " · สถานะ: " + document.getElementById("rptStatus").value : ""}</div>
     </div>
     <table class="rtbl">
-      <thead><tr><th>No</th><th>Shop</th><th>Place</th><th>Description</th><th>Grade</th><th>STD</th><th>Due Date</th><th>รูปก่อน</th><th>Root cause</th><th>Action/Responsible</th><th>Countermeasure</th><th>รูปหลัง</th><th>Status</th></tr></thead>
+      <thead><tr><th>No</th><th>วันที่ตรวจ</th><th>Shop</th><th>Place</th><th>Description</th><th>Grade</th><th>STD</th><th>Due Date</th><th>รูปก่อน</th><th>Root cause</th><th>Action/Responsible</th><th>Countermeasure</th><th>รูปหลัง</th><th>Status</th></tr></thead>
       <tbody>
         ${rows.map((r, i) => `<tr>
-          <td>${i + 1}</td><td>${r.Shop}</td><td>${r.Place || "-"}</td><td>${escapeHtml(r.Description)}</td>
+          <td>${i + 1}</td><td>${fmtDate(r.PatrolDate)}</td><td>${r.Shop}</td><td>${r.Place || "-"}</td><td>${escapeHtml(r.Description)}</td>
           <td>${r.Grade}</td><td>${r.Category || "-"}</td><td>${fmtDate(r.DueDate)}</td>
           <td>${reportPhotoCell(r.PhotoBeforeUrl)}</td>
           <td>${escapeHtml(r.RootCause) || "-"}</td><td>${escapeHtml(r.ActionResponsible) || "-"}</td>
