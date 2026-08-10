@@ -1432,7 +1432,10 @@ async function refreshDynamicOptions(force) {
 }
 document.getElementById("newFindingBtn").addEventListener("click", async () => {
   if (!canCreate()) { alert("บทบาทปัจจุบันไม่มีสิทธิ์สร้างรายการใหม่ (เฉพาะผู้ตรวจ / Safety Admin)"); return; }
-  await refreshDynamicOptions();
+  // โหลด SLA_Days/ตัวเลือก dropdown ใหม่ทุกครั้งที่เปิดฟอร์ม (ไม่ใช้ค่าที่แคชไว้ตอน login) —
+  // กันปัญหาบันทึกรายการใหม่ด้วยจำนวนวัน SLA เก่า ถ้ามีคนแก้ค่าตั้งค่าใน Google Sheet
+  // ระหว่างที่ session นี้เปิดค้างอยู่ (ซึ่งจะทำให้ DueDate ที่คำนวณไม่ตรงกับที่ตั้งไว้จริง)
+  await refreshDynamicOptions(true);
   document.getElementById("f_typeOfAudit").value = "";
   document.getElementById("f_patrolDate").value = todayStr();
   document.getElementById("f_shop").value = "";
