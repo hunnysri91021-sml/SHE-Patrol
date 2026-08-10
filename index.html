@@ -2237,6 +2237,13 @@ async function showApp() {
   if (loadFindingsError) {
     document.getElementById("listContainer").innerHTML = `<div class="empty">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(loadFindingsError.message)}<br><button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="location.reload()">ลองใหม่</button></div>`;
   } else {
+    // ตั้งตัวกรองเดือนเริ่มต้นเป็นเดือนล่าสุดที่มีรายการตรวจ (ถ้ายังไม่ได้เลือกเดือนไว้)
+    // เพื่อไม่ให้หน้าหลักโชว์ทุกเดือนรวมกันตั้งแต่เปิดแอปครั้งแรก
+    const filterMonthEl = document.getElementById("filterMonth");
+    if (!filterMonthEl.value && findings.length) {
+      const latestDate = findings.reduce((max, f) => (f.PatrolDate && f.PatrolDate > max) ? f.PatrolDate : max, "");
+      if (latestDate) filterMonthEl.value = latestDate.slice(0, 7);
+    }
     renderList();
     maybeOpenDeepLink();
   }
