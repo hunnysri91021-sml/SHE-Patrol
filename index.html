@@ -1172,7 +1172,7 @@ function canEditProgress(f) {
   if (roles.includes("dept")) { const u = getCurrentUser(); return !!(u && u.Shop && u.Shop === f.Shop); }
   return false;
 }
-function canEditDetails() { return currentRoles().includes("admin"); }
+function canEditDetails() { return currentRoles().some(r => r === "admin" || r === "auditor"); }
 function canClose() { return currentRoles().includes("admin"); }
 function canManageUsers() { return currentRoles().includes("admin"); }
 
@@ -1495,7 +1495,7 @@ async function openDetail(id) {
   body.innerHTML = `
     <div class="detail-row"><div class="k">รหัส Finding</div><div class="v">${findingCode(f)}</div></div>
     ${editableDetails ? `
-      <div class="section-title">ข้อมูลรายการ (Admin แก้ไขได้)</div>
+      <div class="section-title">ข้อมูลรายการ (Admin/ผู้ตรวจ แก้ไขได้)</div>
       <div class="grid2">
         <div class="field"><label>ประเภทการตรวจ</label><select id="d_typeOfAudit"></select></div>
         <div class="field"><label>วันที่ตรวจ</label><input type="date" id="d_patrolDate" value="${f.PatrolDate}"></div>

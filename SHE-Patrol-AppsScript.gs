@@ -523,14 +523,14 @@ function requireRole_(user, allowedCodes) {
   if (!allowedCodes.some(c => codes.includes(c))) throw new Error("ไม่มีสิทธิ์ทำรายการนี้");
 }
 // mirror ของ canEditProgress()/canEditDetails() ฝั่ง client — ข้อมูลเดิมของรายการ
-// (TypeOfAudit/PatrolDate/Shop/Place/Description/Grade/Category) แก้ได้เฉพาะ Admin,
+// (TypeOfAudit/PatrolDate/Shop/Place/Description/Grade/Category) แก้ได้ทั้ง Admin/Auditor,
 // ฟิลด์ความคืบหน้าที่เหลือแก้ได้ทั้ง Admin/Auditor/หน่วยงานที่ตรง Shop ของตัวเอง,
 // และปิดงาน (Status: "ปิดงาน") ทำได้เฉพาะ Admin เท่านั้น
 function requireCanEditFinding_(user, findingId, fields) {
   const codes = userRoleCodes_(user);
   const detailFields = ["TypeOfAudit", "PatrolDate", "Shop", "Place", "Description", "Grade", "Category"];
-  if (Object.keys(fields).some(k => detailFields.includes(k)) && !codes.includes("admin")) {
-    throw new Error("แก้ไขข้อมูลเดิมของรายการได้เฉพาะ Admin");
+  if (Object.keys(fields).some(k => detailFields.includes(k)) && !codes.includes("admin") && !codes.includes("auditor")) {
+    throw new Error("แก้ไขข้อมูลเดิมของรายการได้เฉพาะ Admin หรือผู้ตรวจ (Auditor)");
   }
   if (fields.Status === "ปิดงาน" && !codes.includes("admin")) {
     throw new Error("ปิดงานได้เฉพาะ Admin");
