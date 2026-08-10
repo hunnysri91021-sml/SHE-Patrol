@@ -514,7 +514,7 @@ function verifySessionToken_(token) {
   return sanitizeUser_(row);
 }
 
-const ROLE_CODE_MAP_ = { "SHE-Auditor": "auditor", "SHE-Dept-Responsible": "dept", "SHE-Safety-Admin": "admin", "SHE-Executive-Viewer": "exec" };
+const ROLE_CODE_MAP_ = { "SHE-Auditor": "auditor", "SHE-Dept-Responsible": "dept", "SHE-Safety-Admin": "admin", "SHE-Executive-Viewer": "exec", "SHE-Safety-Officer": "safety" };
 function userRoleCodes_(user) {
   return (user.Role || "").split(",").map(s => ROLE_CODE_MAP_[s.trim()]).filter(Boolean);
 }
@@ -522,20 +522,21 @@ function requireRole_(user, allowedCodes) {
   const codes = userRoleCodes_(user);
   if (!allowedCodes.some(c => codes.includes(c))) throw new Error("ไม่มีสิทธิ์ทำรายการนี้");
 }
-// mirror ของ canEditProgress()/canEditDetails() ฝั่ง client — ข้อมูลเดิมของรายการ
-// (TypeOfAudit/PatrolDate/Shop/Place/Description/Grade/Category) แก้ได้ทั้ง Admin/Auditor,
-// ฟิลด์ความคืบหน้าที่เหลือแก้ได้ทั้ง Admin/Auditor/หน่วยงานที่ตรง Shop ของตัวเอง,
-// และปิดงาน (Status: "ปิดงาน") ทำได้เฉพาะ Admin เท่านั้น
+// mirror ของ canEditProgress()/canEditDetails()/canClose() ฝั่ง client — ข้อมูลเดิมของรายการ
+// (TypeOfAudit/PatrolDate/Shop/Place/Description/Grade/Category) แก้ได้ทั้ง Admin/Auditor/
+// Safety Officer (SHE-Safety-Officer — ไม่ใช่ Safety Admin เต็มรูปแบบ), ฟิลด์ความคืบหน้าที่เหลือ
+// แก้ได้ทั้งสามบทบาทนั้นบวกหน่วยงานที่ตรง Shop ของตัวเอง, และปิดงาน (Status: "ปิดงาน")
+// ทำได้เฉพาะ Admin กับ Safety Officer เท่านั้น (ไม่ใช่ Auditor/หน่วยงาน)
 function requireCanEditFinding_(user, findingId, fields) {
   const codes = userRoleCodes_(user);
   const detailFields = ["TypeOfAudit", "PatrolDate", "Shop", "Place", "Description", "Grade", "Category"];
-  if (Object.keys(fields).some(k => detailFields.includes(k)) && !codes.includes("admin") && !codes.includes("auditor")) {
-    throw new Error("แก้ไขข้อมูลเดิมของรายการได้เฉพาะ Admin หรือผู้ตรวจ (Auditor)");
+  if (Object.keys(fields).some(k => detailFields.includes(k)) && !codes.includes("admin") && !codes.includes("auditor") && !codes.includes("safety")) {
+    throw new Error("แก้ไขข้อมูลเดิมของรายการได้เฉพาะ Admin, ผู้ตรวจ (Auditor) หรือ จนท.ความปลอดภัย");
   }
-  if (fields.Status === "ปิดงาน" && !codes.includes("admin")) {
-    throw new Error("ปิดงานได้เฉพาะ Admin");
+  if (fields.Status === "ปิดงาน" && !codes.includes("admin") && !codes.includes("safety")) {
+    throw new Error("ปิดงานได้เฉพาะ Admin หรือ จนท.ความปลอดภัย");
   }
-  if (codes.includes("admin") || codes.includes("auditor")) return;
+  if (codes.includes("admin") || codes.includes("auditor") || codes.includes("safety")) return;
   if (codes.includes("dept")) {
     const finding = getFinding_(findingId);
     if (user.Shop && user.Shop === finding.Shop) return;

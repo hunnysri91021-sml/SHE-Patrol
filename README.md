@@ -38,7 +38,7 @@
 | ส่วน | ใช้งานโดย | คำอธิบาย |
 |---|---|---|
 | Login | ทุกคน | เลือกชื่อตัวเองจากรายชื่อที่ Admin เพิ่มไว้ — **ไม่ใช่การสมัครสมาชิกเอง** |
-| หน้าหลัก | ทุกคน (สิทธิ์แก้ไขต่างกันตาม Role) | รายการ findings กรองตามเดือน/Shop/Grade/สถานะ, ปุ่ม "+ บันทึกรายการตรวจใหม่" (Auditor/Admin), เปิดดูรายละเอียด — แก้ไข "ข้อมูลรายการ" เดิม (ประเภทตรวจ/วันที่/Shop/จุดที่พบ/รายละเอียด/Grade) ได้เฉพาะ Auditor/Admin, แก้ไข "ความคืบหน้า" (สาเหตุ/ผู้รับผิดชอบ/มาตรการ/รูปหลังแก้ไข) ได้ทั้ง Auditor/Admin/หน่วยงานเจ้าของ Shop นั้น, ปิดงานได้เฉพาะ Admin, Export CSV |
+| หน้าหลัก | ทุกคน (สิทธิ์แก้ไขต่างกันตาม Role) | รายการ findings กรองตามเดือน/Shop/Grade/สถานะ, ปุ่ม "+ บันทึกรายการตรวจใหม่" (Auditor/Admin), เปิดดูรายละเอียด — แก้ไข "ข้อมูลรายการ" เดิม (ประเภทตรวจ/วันที่/Shop/จุดที่พบ/รายละเอียด/Grade) ได้เฉพาะ Auditor/Admin/SHE-Safety-Officer, แก้ไข "ความคืบหน้า" (สาเหตุ/ผู้รับผิดชอบ/มาตรการ/รูปหลังแก้ไข) ได้ทั้ง Auditor/Admin/SHE-Safety-Officer/หน่วยงานเจ้าของ Shop นั้น, ปิดงานได้เฉพาะ Admin/SHE-Safety-Officer (ไม่ใช่ Auditor), Export CSV |
 | Dashboard | ทุกคน | กราฟ Grade / Category / อัตราปิดงานตรงเวลารายเดือน / พื้นที่ปัญหาซ้ำ |
 | รายงานผู้บริหาร | ทุกคน | รูปแบบ SES/F-PES เดิม พิมพ์เป็น PDF หรือ export CSV |
 | จัดการผู้ใช้งาน | เฉพาะ Safety Admin | เพิ่ม/แก้ไขผู้ใช้งาน — พิมพ์ชื่อ-อีเมลใครก็ได้ ไม่ต้องมีบัญชีมาก่อน กำหนด Role/Shop ให้แต่ละคน |
@@ -81,10 +81,10 @@ login และเช็คซ้ำทุก 60 วินาทีโดยอ�
   Script Properties — ไม่เคยอยู่ในโค้ด/ไม่เคยส่งให้ client) ออกให้ตอน `login_()` สำเร็จเท่านั้น
   และหมดอายุใน 24 ชม. — คนที่มีแค่ `API_TOKEN` (ซึ่งฝังอยู่ใน `index.html` แบบสาธารณะ อ่านโค้ดหน้าเว็บ
   ก็เห็น) เรียก `listFindings`/`listUsers`/`createUser` ฯลฯ **ไม่ได้เลยถ้าไม่เคย login จริง**
-  นอกจากนี้ `doPost()` ยังเช็คสิทธิ์ตาม Role ซ้ำอีกชั้น (ไม่ใช่แค่เชื่อ client) — Auditor/Dept
-  แก้ข้อมูลเดิมของรายการ (Place/Description/ฯลฯ) หรือปิดงานเองไม่ได้แม้จะเลี่ยงหน้าเว็บยิง API ตรงๆ
-  เอง, Dept แก้ finding นอก Shop ตัวเองไม่ได้ — ทดสอบยืนยันแล้วว่าบล็อกได้จริงแม้เรียก `apiCall()`
-  ตรงๆ ผ่าน console ข้าม UI ไปเลย
+  นอกจากนี้ `doPost()` ยังเช็คสิทธิ์ตาม Role ซ้ำอีกชั้น (ไม่ใช่แค่เชื่อ client) — แก้ข้อมูลเดิมของ
+  รายการ (Place/Description/ฯลฯ) ได้เฉพาะ Admin/Auditor/SHE-Safety-Officer, ปิดงานได้เฉพาะ
+  Admin/SHE-Safety-Officer, Dept แก้ finding นอก Shop ตัวเองไม่ได้ — ทดสอบยืนยันแล้วว่าบล็อกได้จริง
+  แม้เรียก `apiCall()` ตรงๆ ผ่าน console ข้าม UI ไปเลย
   ข้อจำกัดที่ยังเหลืออยู่: `API_TOKEN` (ชั้นแรกก่อนถึง session token) ยังเป็นค่าคงที่ฝังในโค้ด
   สาธารณะเหมือนเดิม แต่ตอนนี้แค่นั้นไม่พอจะดึงข้อมูลจริงได้แล้ว ต้องมี session token ที่ถูกต้องด้วย
 - Dept-Responsible แต่ละคนผูกกับ **Shop เดียว** (ตั้งตอนเพิ่มผู้ใช้) — แก้ไข finding ได้เฉพาะ Shop ของตัวเอง
@@ -159,7 +159,7 @@ up/Store/อื่นๆ) · `Place` · `Description` · `Grade` (A/B/C/Others �
 
 ## Google Sheet: แท็บ Users
 
-`Id` (auto) · `Name` · `Email` · `Role` (SHE-Auditor/SHE-Dept-Responsible/SHE-Safety-Admin/SHE-Executive-Viewer) ·
+`Id` (auto) · `Name` · `Email` · `Role` (SHE-Auditor/SHE-Dept-Responsible/SHE-Safety-Admin/SHE-Executive-Viewer/SHE-Safety-Officer) ·
 `Shop` (เฉพาะ Dept-Responsible) · `Active` (TRUE/FALSE) · `Password` (SHA-256 hash — ดูหัวข้อ
 "เรื่องผู้ใช้งาน/สิทธิ์" ด้านบน)
 

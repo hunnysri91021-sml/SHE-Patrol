@@ -250,6 +250,7 @@
   .role-badge.dept{background:var(--orange-pale);color:var(--orange);}
   .role-badge.admin{background:var(--accent-pale);color:var(--accent);}
   .role-badge.exec{background:var(--green-pale);color:var(--green);}
+  .role-badge.safety{background:#EDE9FE;color:#6D28D9;}
   .active-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);}
   .active-dot.off{background:var(--muted);}
   .info-banner{background:var(--navy-pale);color:var(--navy);padding:11px 14px;border-radius:8px;font-size:12.5px;margin-bottom:14px;}
@@ -596,6 +597,7 @@
         <div id="u_roleChecks" style="display:flex;flex-direction:column;gap:6px;">
           <label style="font-weight:400;"><input type="checkbox" class="u_role_cb" value="SHE-Auditor" style="width:auto;"> SHE-Auditor — ผู้ตรวจ</label>
           <label style="font-weight:400;"><input type="checkbox" class="u_role_cb" value="SHE-Dept-Responsible" style="width:auto;"> SHE-Dept-Responsible — หน่วยงานรับผิดชอบ</label>
+          <label style="font-weight:400;"><input type="checkbox" class="u_role_cb" value="SHE-Safety-Officer" style="width:auto;"> SHE-Safety-Officer — จนท.ความปลอดภัย (แก้ไข/ปรับปรุง/ปิดงานได้ ไม่ใช่ Admin)</label>
           <label style="font-weight:400;"><input type="checkbox" class="u_role_cb" value="SHE-Safety-Admin" style="width:auto;"> SHE-Safety-Admin — Safety Admin</label>
           <label style="font-weight:400;"><input type="checkbox" class="u_role_cb" value="SHE-Executive-Viewer" style="width:auto;"> SHE-Executive-Viewer — ผู้บริหาร (ดูอย่างเดียว)</label>
         </div>
@@ -1014,7 +1016,7 @@ const SheAPI = (function () {
  * ====================================================================== */
 const SheUsersAPI = (function () {
   const DEMO_KEY = "she_patrol_demo_users";
-  const DEMO_SEED_VERSION = "2026-08-users-v2-password";
+  const DEMO_SEED_VERSION = "2026-08-users-v3-safety-role";
   const DEMO_DEFAULT_PASSWORD = "demo1234"; // ทุกบัญชี demo ใช้รหัสผ่านนี้ — ไม่ใช่ข้อมูลจริง
 
   function seedUsers() {
@@ -1025,6 +1027,7 @@ const SheUsersAPI = (function () {
       { Id: 4, Name: "หัวหน้างาน Acc", Email: "acc.lead@example-sml.co.th", Role: "SHE-Dept-Responsible", Shop: "Acc", Active: true, Password: DEMO_DEFAULT_PASSWORD },
       { Id: 5, Name: "หัวหน้างาน Yard", Email: "yard.lead@example-sml.co.th", Role: "SHE-Dept-Responsible", Shop: "Yard", Active: true, Password: DEMO_DEFAULT_PASSWORD },
       { Id: 6, Name: "ผู้บริหาร SML", Email: "exec.viewer@example-sml.co.th", Role: "SHE-Executive-Viewer", Shop: "", Active: true, Password: DEMO_DEFAULT_PASSWORD },
+      { Id: 7, Name: "จนท.ความปลอดภัย ปิยะ", Email: "safety.officer@example-sml.co.th", Role: "SHE-Safety-Officer", Shop: "", Active: true, Password: DEMO_DEFAULT_PASSWORD },
     ];
     localStorage.setItem(DEMO_KEY, JSON.stringify(seeded));
     localStorage.setItem(DEMO_KEY + "_version", DEMO_SEED_VERSION);
@@ -1143,10 +1146,10 @@ const SheSettingsAPI = (function () {
  * ไม่ใช่การเลือกบทบาทใดบทบาทหนึ่งมา "ทับ" บทบาทอื่น — ค่าเดิมที่มีแค่บทบาทเดียว
  * (ไม่มีจุลภาค) ยังใช้ได้ปกติ ถือเป็นรายการที่มีสมาชิกตัวเดียว
  * ====================================================================== */
-const ROLE_MAP = { "SHE-Auditor": "auditor", "SHE-Dept-Responsible": "dept", "SHE-Safety-Admin": "admin", "SHE-Executive-Viewer": "exec" };
-const ROLE_LABELS = { auditor: "ผู้ตรวจ", dept: "หน่วยงานรับผิดชอบ", admin: "Safety Admin", exec: "ผู้บริหาร" };
+const ROLE_MAP = { "SHE-Auditor": "auditor", "SHE-Dept-Responsible": "dept", "SHE-Safety-Admin": "admin", "SHE-Executive-Viewer": "exec", "SHE-Safety-Officer": "safety" };
+const ROLE_LABELS = { auditor: "ผู้ตรวจ", dept: "หน่วยงานรับผิดชอบ", admin: "Safety Admin", exec: "ผู้บริหาร", safety: "จนท.ความปลอดภัย" };
 // ลำดับความสำคัญไว้ใช้ตอนต้องเลือกโชว์ label เดียว (เช่น ป้ายชื่อมุมขวาบน)
-const ROLE_PRIORITY = ["admin", "auditor", "dept", "exec"];
+const ROLE_PRIORITY = ["admin", "safety", "auditor", "dept", "exec"];
 function roleShortCode(fullRole) { return ROLE_MAP[fullRole] || "exec"; }
 function roleShortCodes(fullRoleList) {
   const codes = (fullRoleList || "").split(",").map(s => s.trim()).filter(Boolean).map(roleShortCode);
@@ -1168,12 +1171,12 @@ function currentRoles() { const u = getCurrentUser(); return roleShortCodes(u ? 
 function canCreate() { return currentRoles().some(r => r === "auditor" || r === "admin"); }
 function canEditProgress(f) {
   const roles = currentRoles();
-  if (roles.includes("admin") || roles.includes("auditor")) return true;
+  if (roles.includes("admin") || roles.includes("auditor") || roles.includes("safety")) return true;
   if (roles.includes("dept")) { const u = getCurrentUser(); return !!(u && u.Shop && u.Shop === f.Shop); }
   return false;
 }
-function canEditDetails() { return currentRoles().some(r => r === "admin" || r === "auditor"); }
-function canClose() { return currentRoles().includes("admin"); }
+function canEditDetails() { return currentRoles().some(r => r === "admin" || r === "auditor" || r === "safety"); }
+function canClose() { return currentRoles().some(r => r === "admin" || r === "safety"); }
 function canManageUsers() { return currentRoles().includes("admin"); }
 
 /* ======================================================================
@@ -1498,7 +1501,7 @@ async function openDetail(id) {
   body.innerHTML = `
     <div class="detail-row"><div class="k">รหัส Finding</div><div class="v">${findingCode(f)}</div></div>
     ${editableDetails ? `
-      <div class="section-title">ข้อมูลรายการ (Admin/ผู้ตรวจ แก้ไขได้)</div>
+      <div class="section-title">ข้อมูลรายการ (Admin/ผู้ตรวจ/จนท.ความปลอดภัย แก้ไขได้)</div>
       <div class="grid2">
         <div class="field"><label>ประเภทการตรวจ</label><select id="d_typeOfAudit"></select></div>
         <div class="field"><label>วันที่ตรวจ</label><input type="date" id="d_patrolDate" value="${f.PatrolDate}"></div>

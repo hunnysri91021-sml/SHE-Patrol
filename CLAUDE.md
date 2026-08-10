@@ -117,11 +117,13 @@ token** issued by `login_()` on successful password check and required by
   `requireRole_()` for admin-only actions (createUser/updateUser/
   updateSettings/createFinding needs admin-or-auditor), and
   `requireCanEditFinding_()` mirrors the client's `canEditProgress()`/
-  `canEditDetails()` exactly — original-detail fields are editable by
-  Admin or Auditor, closing a finding (`Status: "ปิดงาน"`) is admin-only,
-  dept role is shop-scoped — enforced even if someone calls `apiCall()`
-  straight from devtools, bypassing the UI entirely. This was verified with
-  a mock backend implementing the identical contract: a dept user's direct
+  `canEditDetails()`/`canClose()` exactly — original-detail fields are
+  editable by Admin, Auditor, or SHE-Safety-Officer (a non-admin role that
+  can edit/close findings but not manage users/settings), closing a finding
+  (`Status: "ปิดงาน"`) is Admin/SHE-Safety-Officer only, dept role is
+  shop-scoped — enforced even if someone calls `apiCall()` straight from
+  devtools, bypassing the UI entirely. This was verified with a mock backend
+  implementing the identical contract: a dept user's direct
   `apiCall('updateFinding', {fields:{Place:...}})` is rejected, `RootCause`
   on the same finding is accepted, a dept user editing another shop's
   finding is rejected, and a tampered token is rejected and forces logout.
