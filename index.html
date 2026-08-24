@@ -387,6 +387,10 @@
             <option>รอตรวจสอบ</option><option>ปิดงาน</option>
           </select>
         </div>
+        <div class="field">
+          <label>ประเภทการตรวจ</label>
+          <select id="filterTypeOfAudit"><option value="">ทั้งหมด</option></select>
+        </div>
         <button class="btn btn-ghost btn-sm" id="clearFilterBtn">ล้างตัวกรอง</button>
         <div style="flex:1"></div>
         <button class="btn btn-ghost" id="exportBtn">⬇ Export CSV</button>
@@ -409,6 +413,10 @@
         <div class="field">
           <label>เดือนที่ตรวจ</label>
           <select id="shopChartMonth"><option value="">ทุกเดือน</option></select>
+        </div>
+        <div class="field">
+          <label>ประเภทการตรวจ</label>
+          <select id="dashTypeOfAudit"><option value="">ทั้งหมด</option></select>
         </div>
         <div style="flex:1"></div>
         <button class="btn btn-ghost" id="shopChartExportBtn">⬇ ดาวน์โหลดสรุป (CSV)</button>
@@ -452,6 +460,10 @@
         <div class="field">
           <label>สถานะ</label>
           <select id="rptStatus"><option value="">ทั้งหมด</option></select>
+        </div>
+        <div class="field">
+          <label>ประเภทการตรวจ</label>
+          <select id="rptTypeOfAudit"><option value="">ทั้งหมด</option></select>
         </div>
         <div style="flex:1"></div>
         <button class="btn btn-ghost" onclick="window.print()">🖨️ พิมพ์ / บันทึก PDF</button>
@@ -1291,11 +1303,13 @@ function getFiltered() {
   const shop = document.getElementById("filterShop").value;
   const grade = document.getElementById("filterGrade").value;
   const status = document.getElementById("filterStatus").value;
+  const typeOfAudit = document.getElementById("filterTypeOfAudit").value;
   return findings.filter(f =>
     (!month || f.PatrolDate.startsWith(month)) &&
     (!shop || f.Shop === shop) &&
     (!grade || f.Grade === grade) &&
-    (!status || f.Status === status)
+    (!status || f.Status === status) &&
+    (!typeOfAudit || f.TypeOfAudit === typeOfAudit)
   ).sort((a, b) => b.PatrolDate.localeCompare(a.PatrolDate) || b.Id - a.Id);
 }
 
@@ -1426,8 +1440,12 @@ async function refreshDynamicOptions(force) {
     renderOptionSelect("u_shop", SHOP_OPTIONS, "-- เลือก --");
     renderOptionSelect("f_category", CATEGORY_OPTIONS, "-- เลือก --");
     renderOptionSelect("f_typeOfAudit", TYPE_OF_AUDIT_OPTIONS, "-- เลือก --");
+    renderOptionSelect("filterTypeOfAudit", TYPE_OF_AUDIT_OPTIONS, "ทั้งหมด");
+    renderOptionSelect("dashTypeOfAudit", TYPE_OF_AUDIT_OPTIONS, "ทั้งหมด");
     const rptShopSel = document.getElementById("rptShop");
     if (rptShopSel) { rptShopSel.dataset.filled = ""; rptShopSel.innerHTML = '<option value="">ทั้งหมด</option>'; fillSelectOnce("rptShop", SHOP_OPTIONS); }
+    const rptTypeOfAuditSel = document.getElementById("rptTypeOfAudit");
+    if (rptTypeOfAuditSel) { rptTypeOfAuditSel.dataset.filled = ""; rptTypeOfAuditSel.innerHTML = '<option value="">ทั้งหมด</option>'; fillSelectOnce("rptTypeOfAudit", TYPE_OF_AUDIT_OPTIONS); }
     dynamicOptionsLoaded = true;
   } catch (err) {
     // เงียบไว้พอ — ยังใช้ค่า fallback/ค่าที่มีอยู่เดิมได้ ไม่บล็อกการทำงาน
@@ -1785,12 +1803,13 @@ document.querySelectorAll(".modal-backdrop").forEach(bd => bd.addEventListener("
 /* ======================================================================
  * Filters wiring
  * ====================================================================== */
-["filterMonth", "filterShop", "filterGrade", "filterStatus"].forEach(id => document.getElementById(id).addEventListener("change", renderList));
+["filterMonth", "filterShop", "filterGrade", "filterStatus", "filterTypeOfAudit"].forEach(id => document.getElementById(id).addEventListener("change", renderList));
 document.getElementById("clearFilterBtn").addEventListener("click", () => {
   document.getElementById("filterMonth").value = "";
   document.getElementById("filterShop").value = "";
   document.getElementById("filterGrade").value = "";
   document.getElementById("filterStatus").value = "";
+  document.getElementById("filterTypeOfAudit").value = "";
   renderList();
 });
 
@@ -1833,9 +1852,14 @@ function computeShopAgg(rows) {
     return { shop, found, fixed, remaining: found - fixed };
   });
 }
+function dashboardFilteredRows() {
+  const type = document.getElementById("dashTypeOfAudit").value;
+  return type ? findings.filter(r => r.TypeOfAudit === type) : findings;
+}
 function shopChartFilteredRows() {
+  const rows = dashboardFilteredRows();
   const m = document.getElementById("shopChartMonth").value;
-  return m ? findings.filter(r => r.PatrolDate.slice(0, 7) === m) : findings;
+  return m ? rows.filter(r => r.PatrolDate.slice(0, 7) === m) : rows;
 }
 function renderShopChart() {
   const months = [...new Set(findings.map(r => r.PatrolDate.slice(0, 7)))].sort().reverse();
@@ -1868,10 +1892,11 @@ function exportShopSummaryCsv() {
   a.click(); URL.revokeObjectURL(url);
 }
 document.getElementById("shopChartMonth").addEventListener("change", renderShopChart);
+document.getElementById("dashTypeOfAudit").addEventListener("change", renderDashboardCharts);
 document.getElementById("shopChartExportBtn").addEventListener("click", exportShopSummaryCsv);
 
 function renderDashboardCharts() {
-  const rows = findings;
+  const rows = dashboardFilteredRows();
   renderKpiCards("dashCards2", rows);
   destroyCharts();
   renderShopChart();
@@ -1930,7 +1955,8 @@ function reportFilteredRows() {
   const month = document.getElementById("rptMonth").value;
   const shop = document.getElementById("rptShop").value;
   const status = document.getElementById("rptStatus").value;
-  return findings.filter(r => (!month || r.PatrolDate.slice(0, 7) === month) && (!shop || r.Shop === shop) && (!status || r.Status === status))
+  const typeOfAudit = document.getElementById("rptTypeOfAudit").value;
+  return findings.filter(r => (!month || r.PatrolDate.slice(0, 7) === month) && (!shop || r.Shop === shop) && (!status || r.Status === status) && (!typeOfAudit || r.TypeOfAudit === typeOfAudit))
     .sort((a, b) => a.PatrolDate.localeCompare(b.PatrolDate) || a.Id - b.Id);
 }
 function reportPhotoCell(urls) {
@@ -1943,6 +1969,7 @@ function renderReport() {
   fillSelectOnce("rptMonth", months);
   fillSelectOnce("rptShop", SHOP_OPTIONS);
   fillSelectOnce("rptStatus", STATUS_OPTIONS);
+  fillSelectOnce("rptTypeOfAudit", TYPE_OF_AUDIT_OPTIONS);
   const rows = reportFilteredRows();
   const monthLabel = document.getElementById("rptMonth").value
     ? new Date(document.getElementById("rptMonth").value + "-01").toLocaleDateString("th-TH", { year: "numeric", month: "long" })
@@ -1950,7 +1977,7 @@ function renderReport() {
   document.getElementById("reportSheet").innerHTML = `
     <div class="report-head">
       <div class="title">( SES / F-PES ) Report of findings</div>
-      <div style="font-size:11px;color:var(--muted);">รอบรายงาน: ${monthLabel}${document.getElementById("rptShop").value ? " · Shop: " + document.getElementById("rptShop").value : ""}${document.getElementById("rptStatus").value ? " · สถานะ: " + document.getElementById("rptStatus").value : ""}</div>
+      <div style="font-size:11px;color:var(--muted);">รอบรายงาน: ${monthLabel}${document.getElementById("rptShop").value ? " · Shop: " + document.getElementById("rptShop").value : ""}${document.getElementById("rptStatus").value ? " · สถานะ: " + document.getElementById("rptStatus").value : ""}${document.getElementById("rptTypeOfAudit").value ? " · ประเภทการตรวจ: " + document.getElementById("rptTypeOfAudit").value : ""}</div>
     </div>
     <table class="rtbl">
       <thead><tr><th>No</th><th>วันที่ตรวจ</th><th>Shop</th><th>Place</th><th>Description</th><th>Grade</th><th>STD</th><th>Due Date</th><th>รูปก่อน</th><th>Root cause</th><th>Action/Responsible</th><th>Countermeasure</th><th>รูปหลัง</th><th>Status</th></tr></thead>
@@ -1972,7 +1999,7 @@ function renderReport() {
   `;
 }
 document.getElementById("rptExportBtn").addEventListener("click", () => exportRowsToCsv(reportFilteredRows(), `SHE_Patrol_Report_${document.getElementById("rptMonth").value || "all"}.csv`));
-["rptMonth", "rptShop", "rptStatus"].forEach(id => document.getElementById(id).addEventListener("change", renderReport));
+["rptMonth", "rptShop", "rptStatus", "rptTypeOfAudit"].forEach(id => document.getElementById(id).addEventListener("change", renderReport));
 
 /* ======================================================================
  * Admin — manage users
