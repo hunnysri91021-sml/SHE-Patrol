@@ -591,7 +591,7 @@ function listOnlineUsers_() {
   const cutoff = Date.now() - ONLINE_THRESHOLD_MS;
   return readAllRows_(USERS_SHEET_NAME, USERS_HEADERS)
     .filter(u => u.Active && u.LastActiveAt && new Date(u.LastActiveAt).getTime() >= cutoff)
-    .map(u => ({ Id: u.Id, Name: u.Name, Role: u.Role }))
+    .map(u => ({ Id: u.Id, Name: u.Name, Role: u.Role, Shop: u.Shop || "" }))
     .sort((a, b) => a.Name.localeCompare(b.Name));
 }
 
