@@ -59,7 +59,8 @@ const FINDINGS_HEADERS = [
   "PhotoBeforeUrl", "DueDate", "RootCause", "ActionResponsible", "Countermeasure",
   "PhotoAfterUrl", "Status", "VerifiedBy", "Rules_Confirmed_DateTime",
 ];
-const USERS_HEADERS = ["Id", "Name", "Email", "Role", "Shop", "Active", "Password"];
+const USERS_HEADERS = ["Id", "Name", "Email", "Role", "Shop", "Active", "Password", "LastActiveAt"];
+const ONLINE_THRESHOLD_MS = 2 * 60 * 1000; // ถือว่า "กำลังใช้งานอยู่" ถ้า heartbeat ล่าสุดไม่เกิน 2 นาที
 const LOG_HEADERS = ["Timestamp", "UserId", "UserName", "Action", "TargetType", "TargetId", "Details"];
 
 const STATUS_OPEN = ["เปิดใหม่", "รอดำเนินการ", "ดำเนินการแล้ว", "รอตรวจสอบ"];
@@ -333,6 +334,10 @@ function doPost(e) {
       case "listActivityLog":
         requireRole_(sessionUser, ["admin"]);
         return jsonResponse({ ok: true, data: listActivityLog_() });
+      case "heartbeat":
+        heartbeat_(sessionUser);
+        return jsonResponse({ ok: true, data: listOnlineUsers_() });
+      case "listOnlineUsers": return jsonResponse({ ok: true, data: listOnlineUsers_() });
       case "ping": return jsonResponse({ ok: true, data: ping_() });
       default: return jsonResponse({ ok: false, error: "ไม่รู้จัก action: " + data.action });
     }
@@ -559,6 +564,35 @@ function loginOptions_() {
   return readAllRows_(USERS_SHEET_NAME, USERS_HEADERS)
     .filter(u => u.Active)
     .map(u => ({ Id: u.Id, Name: u.Name, Role: u.Role, Active: true }));
+}
+
+// ---------------------------------------------------------------
+// "กำลังใช้งานอยู่" — front-end เรียก heartbeat ทุก ~45 วิระหว่างเปิดแอปค้างไว้
+// (ดู startPresenceHeartbeat() ใน index.html) เขียนเวลาล่าสุดลงคอลัมน์ LastActiveAt
+// ของผู้ใช้คนนั้น แล้ว listOnlineUsers กรองคนที่ heartbeat ไม่เกิน ONLINE_THRESHOLD_MS
+// ที่แล้วมาโชว์ — ไม่มี mechanism แจ้งตอน "ออฟไลน์ทันที" (ปิดแท็บ/ปิดเบราว์เซอร์) เพราะ
+// Apps Script ไม่มี WebSocket ให้ใช้ ต้องพึ่งเวลาหมดอายุแทน จึงอาจเห็นคนที่เพิ่งปิดแท็บ
+// ไปค้างอยู่ในรายการได้สูงสุด ~2 นาที
+// ---------------------------------------------------------------
+function heartbeat_(user) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const rowNum = findRowNumberById_(USERS_SHEET_NAME, USERS_HEADERS, user.Id);
+    if (rowNum === -1) return;
+    const col = USERS_HEADERS.indexOf("LastActiveAt") + 1;
+    getSheet_(USERS_SHEET_NAME).getRange(rowNum, col).setValue(new Date().toISOString());
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function listOnlineUsers_() {
+  const cutoff = Date.now() - ONLINE_THRESHOLD_MS;
+  return readAllRows_(USERS_SHEET_NAME, USERS_HEADERS)
+    .filter(u => u.Active && u.LastActiveAt && new Date(u.LastActiveAt).getTime() >= cutoff)
+    .map(u => ({ Id: u.Id, Name: u.Name, Role: u.Role }))
+    .sort((a, b) => a.Name.localeCompare(b.Name));
 }
 
 // ---------------------------------------------------------------

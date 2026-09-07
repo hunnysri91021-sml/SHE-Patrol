@@ -227,6 +227,16 @@
   .conn-detail{margin-top:10px;font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:4px;}
   .conn-detail code{font-size:11.5px;background:var(--gray-pale);padding:2px 5px;border-radius:4px;}
 
+  /* ---- Online users (who's using the app right now) ---- */
+  .online-chip{position:relative;display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.12);padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);font-size:12px;color:#fff;cursor:pointer;user-select:none;}
+  .online-chip:hover{background:rgba(255,255,255,0.2);}
+  .online-dot{width:8px;height:8px;border-radius:50%;background:#48BB78;flex-shrink:0;}
+  .online-popover{position:absolute;top:calc(100% + 8px);left:0;min-width:220px;max-width:280px;background:var(--card);color:var(--ink);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);padding:10px 0;z-index:50;display:none;}
+  .online-popover.show{display:block;}
+  .online-popover .op-title{padding:2px 14px 8px;font-size:11.5px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);margin-bottom:4px;}
+  .online-popover .op-row{padding:6px 14px;font-size:13px;display:flex;align-items:center;gap:8px;}
+  .online-popover .op-empty{padding:8px 14px;font-size:12.5px;color:var(--muted);}
+
   /* ---- App shell / nav ---- */
   .user-chip{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.12);padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);font-size:12.5px;}
   .user-chip b{font-weight:700;}
@@ -334,6 +344,14 @@
         <div class="conn-chip" id="connChip">
           <span class="conn-dot" id="connDot"></span>
           <span id="connText">กำลังตรวจสอบ...</span>
+        </div>
+        <div class="online-chip" id="onlineChip">
+          <span class="online-dot"></span>
+          <span>👥 กำลังใช้งาน (<span id="onlineCount">0</span>)</span>
+          <div class="online-popover" id="onlinePopover">
+            <div class="op-title">ผู้ที่กำลังใช้งานอยู่ตอนนี้</div>
+            <div id="onlinePopoverBody"><div class="op-empty">กำลังโหลด...</div></div>
+          </div>
         </div>
         <div class="user-chip">
           <span>👤 <b id="userChipName"></b></span>
@@ -2362,6 +2380,62 @@ function startConnectionWatch() {
 }
 
 /* ======================================================================
+ * Online users ("กำลังใช้งานอยู่") — heartbeat ทุก 45 วิระหว่างเปิดแอปค้างไว้
+ * ไม่มี WebSocket ให้ใช้ (Apps Script/localStorage ล้วนเป็น request-response) จึงพึ่งเวลา
+ * หมดอายุแทน "ออฟไลน์ทันที" — คนที่เพิ่งปิดแท็บอาจค้างอยู่ในรายการได้สูงสุด ~2 นาที
+ * ====================================================================== */
+const PRESENCE_HEARTBEAT_MS = 45000;
+const PRESENCE_ONLINE_THRESHOLD_MS = 2 * 60 * 1000;
+function roleLabelShort_(role) { return ROLE_LABELS[roleShortCode(role)] || ""; }
+
+async function sendHeartbeat() {
+  const u = getCurrentUser();
+  if (!u) return;
+  try {
+    const rows = SheAPI.LIVE ? await apiCall("heartbeat") : demoHeartbeat_(u);
+    renderOnlinePopover(rows);
+  } catch (err) {
+    // เงียบไว้ — heartbeat พังไม่ควรรบกวนผู้ใช้ ลองใหม่รอบถัดไปเอง
+  }
+}
+
+// Demo mode ไม่มี backend จริง — เก็บ presence ใน localStorage คีย์ตาม UserId เดียวกัน
+// ทุกแท็บของ origin เดียวกันเห็นค่าเดียวกัน จึงเทสสถานการณ์ "หลายคนใช้พร้อมกัน" ได้จริง
+// โดยเปิดหลายแท็บแล้ว login คนละบัญชี demo
+function demoHeartbeat_(user) {
+  const KEY = "she_patrol_demo_presence";
+  let map = {};
+  try { map = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { map = {}; }
+  map[user.Id] = { Id: user.Id, Name: user.Name, Role: user.Role, LastActiveAt: new Date().toISOString() };
+  const cutoff = Date.now() - PRESENCE_ONLINE_THRESHOLD_MS;
+  Object.keys(map).forEach(id => { if (new Date(map[id].LastActiveAt).getTime() < cutoff) delete map[id]; });
+  localStorage.setItem(KEY, JSON.stringify(map));
+  return Object.values(map).sort((a, b) => a.Name.localeCompare(b.Name));
+}
+
+function renderOnlinePopover(rows) {
+  document.getElementById("onlineCount").textContent = rows.length;
+  const body = document.getElementById("onlinePopoverBody");
+  body.innerHTML = rows.length
+    ? rows.map(r => `<div class="op-row"><span class="online-dot"></span><span>${escapeHtml(r.Name)}</span><span style="color:var(--muted);font-size:11.5px;">${escapeHtml(roleLabelShort_(r.Role))}</span></div>`).join("")
+    : `<div class="op-empty">ไม่มีใครใช้งานอยู่ตอนนี้</div>`;
+}
+
+let presenceWatchStarted = false;
+function startPresenceWatch() {
+  sendHeartbeat();
+  if (presenceWatchStarted) return;
+  presenceWatchStarted = true;
+  setInterval(sendHeartbeat, PRESENCE_HEARTBEAT_MS);
+}
+
+document.getElementById("onlineChip").addEventListener("click", e => {
+  e.stopPropagation();
+  document.getElementById("onlinePopover").classList.toggle("show");
+});
+document.addEventListener("click", () => document.getElementById("onlinePopover").classList.remove("show"));
+
+/* ======================================================================
  * Login / session bootstrap
  * ====================================================================== */
 let loginUsersCache = [];
@@ -2400,7 +2474,21 @@ document.getElementById("loginBtn").addEventListener("click", async () => {
     btn.disabled = false; btn.textContent = "เข้าสู่ระบบ";
   }
 });
-document.getElementById("logoutBtn").addEventListener("click", () => { clearCurrentUser(); location.reload(); });
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  // demo mode เอาตัวเองออกจากรายการ "กำลังใช้งานอยู่" ทันที (เขียน localStorage ได้แบบ sync
+  // ก่อน reload) — live mode ไม่มี call แบบนี้ ปล่อยให้หายไปเองตามเวลาหมดอายุ (~2 นาที)
+  const u = getCurrentUser();
+  if (!SheAPI.LIVE && u) {
+    try {
+      const KEY = "she_patrol_demo_presence";
+      const map = JSON.parse(localStorage.getItem(KEY) || "{}");
+      delete map[u.Id];
+      localStorage.setItem(KEY, JSON.stringify(map));
+    } catch (e) { /* เงียบไว้ */ }
+  }
+  clearCurrentUser();
+  location.reload();
+});
 document.getElementById("privacyLinkLogin").addEventListener("click", () => openModal("pdpaModalBackdrop"));
 document.getElementById("privacyLinkApp").addEventListener("click", () => openModal("pdpaModalBackdrop"));
 
@@ -2422,6 +2510,7 @@ async function showApp() {
     document.getElementById("logTabBtn").style.display = "";
   }
   startConnectionWatch();
+  startPresenceWatch();
   if (!SheAPI.LIVE) document.getElementById("demoFlag").style.display = "block";
   document.getElementById("storageNote").textContent = SheAPI.LIVE
     ? "เชื่อมต่อ Google Sheets จริง — ข้อมูลนี้ share กับทุกคนที่ใช้ระบบ ไม่ว่าจะมีบัญชี Microsoft 365 หรือไม่"
