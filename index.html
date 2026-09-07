@@ -230,11 +230,14 @@
   /* ---- Online users (who's using the app right now) ---- */
   .online-chip{position:relative;display:flex;align-items:center;gap:7px;background:rgba(255,255,255,0.12);padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.25);font-size:12px;color:#fff;cursor:pointer;user-select:none;}
   .online-chip:hover{background:rgba(255,255,255,0.2);}
-  .online-dot{width:8px;height:8px;border-radius:50%;background:#48BB78;flex-shrink:0;}
-  .online-popover{position:absolute;top:calc(100% + 8px);left:0;min-width:220px;max-width:280px;background:var(--card);color:var(--ink);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);padding:10px 0;z-index:50;display:none;}
+  @keyframes pulse-dot{0%,100%{box-shadow:0 0 0 0 rgba(72,187,120,.6)}50%{box-shadow:0 0 0 5px rgba(72,187,120,0)}}
+  .online-dot{width:8px;height:8px;border-radius:50%;background:#48BB78;flex-shrink:0;animation:pulse-dot 2s ease-in-out infinite;}
+  .online-popover{position:absolute;top:calc(100% + 8px);right:0;min-width:240px;max-width:300px;background:var(--card);color:var(--ink);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);padding:10px 0;z-index:50;display:none;}
   .online-popover.show{display:block;}
   .online-popover .op-title{padding:2px 14px 8px;font-size:11.5px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--border);margin-bottom:4px;}
-  .online-popover .op-row{padding:6px 14px;font-size:13px;display:flex;align-items:center;gap:8px;}
+  .online-popover .op-row{padding:6px 14px;font-size:13px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .online-popover .op-row .op-me{font-size:10px;background:var(--accent);color:#fff;padding:1px 6px;border-radius:99px;font-weight:700;flex-shrink:0;}
+  .online-popover .op-shop{font-size:11px;color:var(--muted);margin-left:auto;flex-shrink:0;}
   .online-popover .op-empty{padding:8px 14px;font-size:12.5px;color:var(--muted);}
 
   /* ---- App shell / nav ---- */
@@ -2406,7 +2409,7 @@ function demoHeartbeat_(user) {
   const KEY = "she_patrol_demo_presence";
   let map = {};
   try { map = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { map = {}; }
-  map[user.Id] = { Id: user.Id, Name: user.Name, Role: user.Role, LastActiveAt: new Date().toISOString() };
+  map[user.Id] = { Id: user.Id, Name: user.Name, Role: user.Role, Shop: user.Shop || "", LastActiveAt: new Date().toISOString() };
   const cutoff = Date.now() - PRESENCE_ONLINE_THRESHOLD_MS;
   Object.keys(map).forEach(id => { if (new Date(map[id].LastActiveAt).getTime() < cutoff) delete map[id]; });
   localStorage.setItem(KEY, JSON.stringify(map));
@@ -2416,8 +2419,14 @@ function demoHeartbeat_(user) {
 function renderOnlinePopover(rows) {
   document.getElementById("onlineCount").textContent = rows.length;
   const body = document.getElementById("onlinePopoverBody");
+  const me = getCurrentUser();
   body.innerHTML = rows.length
-    ? rows.map(r => `<div class="op-row"><span class="online-dot"></span><span>${escapeHtml(r.Name)}</span><span style="color:var(--muted);font-size:11.5px;">${escapeHtml(roleLabelShort_(r.Role))}</span></div>`).join("")
+    ? rows.map(r => {
+        const isMe = me && r.Id === me.Id;
+        const meBadge = isMe ? `<span class="op-me">คุณ</span>` : "";
+        const shopLabel = r.Shop ? `<span class="op-shop">${escapeHtml(r.Shop)}</span>` : "";
+        return `<div class="op-row"><span class="online-dot"></span><span>${escapeHtml(r.Name)}</span><span style="color:var(--muted);font-size:11.5px;">${escapeHtml(roleLabelShort_(r.Role))}</span>${meBadge}${shopLabel}</div>`;
+      }).join("")
     : `<div class="op-empty">ไม่มีใครใช้งานอยู่ตอนนี้</div>`;
 }
 
