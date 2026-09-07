@@ -351,6 +351,7 @@
     <button class="tab-btn" data-screen="report">รายงานผู้บริหาร</button>
     <button class="tab-btn" data-screen="admin" id="adminTabBtn" style="display:none;">จัดการผู้ใช้งาน</button>
     <button class="tab-btn" data-screen="settings" id="settingsTabBtn" style="display:none;">ตั้งค่า</button>
+    <button class="tab-btn" data-screen="log" id="logTabBtn" style="display:none;">ประวัติการใช้งาน</button>
   </nav>
 
   <div class="app">
@@ -509,6 +510,23 @@
         <button class="btn btn-accent btn-sm" id="saveSettingsBtn">บันทึกการตั้งค่า</button>
       </div>
       <div id="settingsContainer"><div class="loading">กำลังโหลด...</div></div>
+    </div>
+
+    <!-- ---------- SCREEN: ACTIVITY LOG (Admin only) ---------- -->
+    <div id="screen-log" style="display:none;">
+      <div class="info-banner">
+        บันทึกทุกครั้งที่มีการเข้าสู่ระบบ / สร้าง / แก้ไข / ปิดงาน / เปลี่ยนตั้งค่า — ใหม่สุดอยู่บนสุด
+        (แสดงล่าสุด 1,000 รายการ)
+      </div>
+      <div class="toolbar">
+        <div class="field" style="flex:1;min-width:220px;">
+          <label>ค้นหา (ชื่อผู้ทำรายการ / การกระทำ / รายละเอียด)</label>
+          <input type="text" id="logSearch" placeholder="เช่น สมชาย, ปิดงาน, Finding #12">
+        </div>
+        <button class="btn btn-ghost btn-sm" id="logRefreshBtn">↻ โหลดใหม่</button>
+        <button class="btn btn-ghost" id="logExportBtn">⬇ Export CSV</button>
+      </div>
+      <div id="logContainer"><div class="loading">กำลังโหลด...</div></div>
     </div>
 
   </div>
@@ -980,20 +998,31 @@ const SheAPI = (function () {
     // photoFiles: array (0-N) ของ File ที่ผ่าน compressImage มาแล้ว
     async create(fields, photoFiles) {
       const files = photoFiles || [];
-      if (!files.length) return LIVE ? liveCreate(fields) : demoCreate(fields);
+      if (!files.length) {
+        if (LIVE) return liveCreate(fields);
+        const record = await demoCreate(fields);
+        logFindingActivityDemo_("สร้างรายการใหม่", record.Id, `${record.Shop} · ${record.Place || "-"} · Grade ${record.Grade}`);
+        return record;
+      }
       if (LIVE) {
         const photos = await Promise.all(files.map(async f => ({ fileName: f.name, contentBase64: await fileToBase64(f) })));
         return liveCreate(fields, photos);
       }
       const dataUrls = await Promise.all(files.map(f => demoUploadPhoto(f)));
-      return demoCreate({ ...fields, PhotoBeforeUrl: joinPhotoUrls(dataUrls) });
+      const record = await demoCreate({ ...fields, PhotoBeforeUrl: joinPhotoUrls(dataUrls) });
+      logFindingActivityDemo_("สร้างรายการใหม่", record.Id, `${record.Shop} · ${record.Place || "-"} · Grade ${record.Grade}`);
+      return record;
     },
     // photos: { before: File[], after: File[] } — รูปใหม่จะต่อท้ายรูปเดิมของรายการนั้น ไม่แทนที่
     async update(id, fields, photos) {
       const before = (photos && photos.before) || [];
       const after = (photos && photos.after) || [];
       if (!before.length && !after.length) {
-        return LIVE ? liveUpdate(id, fields) : demoUpdate(id, fields);
+        if (LIVE) return liveUpdate(id, fields);
+        const previous = await demoGet(id);
+        const record = await demoUpdate(id, fields);
+        logFindingUpdateDemo_(previous, record, fields, []);
+        return record;
       }
       if (LIVE) {
         const payload = {};
@@ -1003,15 +1032,20 @@ const SheAPI = (function () {
       }
       const current = await demoGet(id);
       const extraFields = { ...fields };
+      const photoNote = [];
       if (before.length) {
         const newUrls = await Promise.all(before.map(f => demoUploadPhoto(f)));
         extraFields.PhotoBeforeUrl = joinPhotoUrls([...splitPhotoUrls(current.PhotoBeforeUrl), ...newUrls]);
+        photoNote.push(`แนบรูปก่อนแก้ไขเพิ่ม ${before.length} รูป`);
       }
       if (after.length) {
         const newUrls = await Promise.all(after.map(f => demoUploadPhoto(f)));
         extraFields.PhotoAfterUrl = joinPhotoUrls([...splitPhotoUrls(current.PhotoAfterUrl), ...newUrls]);
+        photoNote.push(`แนบรูปหลังแก้ไขเพิ่ม ${after.length} รูป`);
       }
-      return demoUpdate(id, extraFields);
+      const record = await demoUpdate(id, extraFields);
+      logFindingUpdateDemo_(current, record, fields, photoNote);
+      return record;
     },
     async uploadPhoto(file, findingId, stage) { return LIVE ? liveUploadPhoto(file, findingId, stage) : demoUploadPhoto(file, findingId, stage); },
     async resolvePhotoUrl(url) {
@@ -1058,16 +1092,23 @@ const SheUsersAPI = (function () {
     const row = { Id: nextId, Active: true, Shop: "", Password: "", ...fields };
     rows.push(row);
     demoWrite(rows);
+    SheActivityLogAPI.record(getCurrentUser(), "เพิ่มผู้ใช้งาน", "User", row.Id, `${row.Name || "-"} · ${row.Role || "-"}`);
     return stripPassword(row);
   }
   async function demoUpdate(id, fields) {
     const rows = demoRead();
     const idx = rows.findIndex(r => r.Id === Number(id));
     if (idx === -1) throw new Error("ไม่พบผู้ใช้งาน");
+    const before = rows[idx];
     const patch = { ...fields };
     if (!patch.Password) delete patch.Password; // เว้นว่าง = ไม่เปลี่ยนรหัสผ่านเดิม
-    rows[idx] = { ...rows[idx], ...patch };
+    rows[idx] = { ...before, ...patch };
     demoWrite(rows);
+    const changedKeys = Object.keys(patch);
+    const diffParts = changedKeys.filter(k => k !== "Password" && String(before[k] ?? "") !== String(rows[idx][k] ?? ""))
+      .map(k => `${k}: "${before[k] ?? ""}" → "${rows[idx][k] ?? ""}"`);
+    if (patch.Password) diffParts.push("Password: (เปลี่ยนแล้ว)");
+    SheActivityLogAPI.record(getCurrentUser(), "แก้ไขผู้ใช้งาน", "User", id, diffParts.join(" | "));
     return stripPassword(rows[idx]);
   }
   async function demoLogin(id, password) {
@@ -1076,7 +1117,9 @@ const SheUsersAPI = (function () {
     if (!u.Active) throw new Error("บัญชีนี้ถูกปิดใช้งาน ติดต่อ Safety Admin");
     if (!u.Password) throw new Error("บัญชีนี้ยังไม่ได้ตั้งรหัสผ่าน ติดต่อ Safety Admin ให้ตั้งรหัสผ่านก่อน");
     if (u.Password !== password) throw new Error("รหัสผ่านไม่ถูกต้อง");
-    return stripPassword(u);
+    const safe = stripPassword(u);
+    SheActivityLogAPI.record(safe, "เข้าสู่ระบบ", "User", safe.Id, "");
+    return safe;
   }
 
   async function liveList() { return apiCall("listUsers"); }
@@ -1133,8 +1176,12 @@ const SheSettingsAPI = (function () {
   }
   async function demoList() { return demoRead(); }
   async function demoUpdate(values) {
-    const rows = demoRead().map(r => ({ ...r, Value: values[r.Key] !== undefined ? values[r.Key] : r.Value }));
+    const before = demoRead();
+    const rows = before.map(r => ({ ...r, Value: values[r.Key] !== undefined ? values[r.Key] : r.Value }));
     localStorage.setItem(DEMO_KEY, JSON.stringify(rows));
+    const changed = rows.filter((r, i) => String(r.Value) !== String(before[i].Value))
+      .map(r => `${r.Key}: "${before.find(b => b.Key === r.Key).Value}" → "${r.Value}"`);
+    if (changed.length) SheActivityLogAPI.record(getCurrentUser(), "แก้ไขตั้งค่า", "Settings", "", changed.join(" | "));
     return rows;
   }
 
@@ -1147,6 +1194,65 @@ const SheSettingsAPI = (function () {
     async update(values) { return LIVE ? liveUpdate(values) : demoUpdate(values); },
   };
 })();
+
+/* ======================================================================
+ * Activity Log — บันทึกว่าใครทำอะไรกับข้อมูลไหนเมื่อไหร่ (login/สร้าง/แก้ไข/ปิดงาน/
+ * แก้ตั้งค่า) ใน live mode backend (.gs) เป็นคนบันทึกเองทุกครั้งที่มี action มาถึง —
+ * ฝั่งนี้แค่ "อ่าน" ผ่าน action listActivityLog. ใน demo mode ไม่มี backend จริง จึง
+ * ต้องเรียก record() ตรงจาก client ที่จุดที่ข้อมูลถูกแก้ไข (ดู logFindingActivityDemo_/
+ * logFindingUpdateDemo_ ด้านล่าง และใน SheUsersAPI/SheSettingsAPI)
+ * ====================================================================== */
+const SheActivityLogAPI = (function () {
+  const DEMO_KEY = "she_patrol_demo_log";
+  const MAX_DEMO_ROWS = 1000;
+
+  function demoRead() {
+    try { return JSON.parse(localStorage.getItem(DEMO_KEY)) || []; } catch (e) { return []; }
+  }
+  function record(user, action, targetType, targetId, details) {
+    const rows = demoRead();
+    rows.push({
+      Timestamp: new Date().toISOString(),
+      UserId: user ? user.Id : "",
+      UserName: user ? user.Name : "",
+      Action: action,
+      TargetType: targetType || "",
+      TargetId: targetId !== undefined && targetId !== null ? targetId : "",
+      Details: details || "",
+    });
+    localStorage.setItem(DEMO_KEY, JSON.stringify(rows.slice(-MAX_DEMO_ROWS)));
+  }
+  async function demoList() {
+    return demoRead().slice().sort((a, b) => String(b.Timestamp).localeCompare(String(a.Timestamp)));
+  }
+  async function liveList() { return apiCall("listActivityLog"); }
+
+  return {
+    LIVE,
+    record, // ไม่มีผลอะไรถ้าเรียกตอน LIVE — ไม่มี call site ไหนเรียกตอน LIVE เพราะ backend log เองอยู่แล้ว
+    async list() { return LIVE ? liveList() : demoList(); },
+  };
+})();
+
+// ระบุ action label ให้อ่านง่ายตามฟิลด์ที่แก้ — mirror ของ findingActionLabel_() ฝั่ง .gs ทุกตัวอักษร
+function findingActionLabelClient_(fields) {
+  const detailFields = ["TypeOfAudit", "PatrolDate", "Shop", "Place", "Description", "Grade", "Category"];
+  if (fields.Status === "ปิดงาน") return "ปิดงาน";
+  if (fields.Status) return "เปลี่ยนสถานะ";
+  if (Object.keys(fields).some(k => detailFields.includes(k))) return "แก้ไขข้อมูลรายการ";
+  return "แก้ไขความคืบหน้า";
+}
+function logFindingActivityDemo_(action, findingId, details) {
+  SheActivityLogAPI.record(getCurrentUser(), action, "Finding", findingId, details);
+}
+function logFindingUpdateDemo_(before, after, fields, photoNote) {
+  const changedKeys = Object.keys(fields).filter(k => k !== "PhotoBeforeUrl" && k !== "PhotoAfterUrl");
+  const diffParts = changedKeys
+    .filter(k => String(before[k] ?? "") !== String(after[k] ?? ""))
+    .map(k => `${k}: "${before[k] ?? ""}" → "${after[k] ?? ""}"`);
+  const details = [...diffParts, ...(photoNote || [])].join(" | ");
+  logFindingActivityDemo_(findingActionLabelClient_(fields), after.Id, details);
+}
 
 /* ======================================================================
  * Role helpers, session (login) — Admin assigns Role/Shop via SHE_Patrol_Users,
@@ -1775,6 +1881,14 @@ document.getElementById("confirmCloseBtn").addEventListener("click", async () =>
 /* ======================================================================
  * Export CSV (shared by home screen + report screen)
  * ====================================================================== */
+function downloadCsv_(headers, rows, filename) {
+  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  a.click(); URL.revokeObjectURL(url);
+}
 function exportRowsToCsv(list, filename) {
   if (!list.length) { alert("ไม่มีข้อมูลให้ export ในตัวกรองนี้"); return; }
   const headers = ["No", "ประเภทการตรวจ", "วันที่ตรวจ", "หน่วยงาน", "จุดที่พบ", "รายละเอียด", "Grade", "ประเภท", "รูปก่อน", "กำหนดปิดงาน", "สาเหตุ", "ผู้รับผิดชอบ", "มาตรการแก้ไข", "รูปหลัง", "สถานะ", "ผู้ตรวจสอบปิดงาน", "วันเวลาปิดงาน"];
@@ -1783,12 +1897,7 @@ function exportRowsToCsv(list, filename) {
     f.RootCause, f.ActionResponsible, f.Countermeasure, f.PhotoAfterUrl, f.Status, f.VerifiedBy,
     f.Rules_Confirmed_DateTime ? new Date(f.Rules_Confirmed_DateTime).toLocaleString("th-TH") : "",
   ]);
-  const csv = [headers, ...rows].map(r => r.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  a.click(); URL.revokeObjectURL(url);
+  downloadCsv_(headers, rows, filename);
 }
 document.getElementById("exportBtn").addEventListener("click", () => exportRowsToCsv(getFiltered(), `SHE_Patrol_Export_${todayStr()}.csv`));
 
@@ -1818,7 +1927,7 @@ document.getElementById("clearFilterBtn").addEventListener("click", () => {
  * ====================================================================== */
 function switchScreen(name) {
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.toggle("active", b.dataset.screen === name));
-  ["home", "dashboard", "report", "admin", "settings"].forEach(s => {
+  ["home", "dashboard", "report", "admin", "settings", "log"].forEach(s => {
     document.getElementById("screen-" + s).style.display = s === name ? "block" : "none";
   });
   if (name === "dashboard") renderDashboardCharts();
@@ -1831,6 +1940,10 @@ function switchScreen(name) {
     if (!canManageUsers()) { alert("เฉพาะ Admin เท่านั้นที่เข้าเมนูนี้ได้"); switchScreen("home"); return; }
     renderSettingsForm();
     refreshConnectionStatus();
+  }
+  if (name === "log") {
+    if (!canManageUsers()) { alert("เฉพาะ Admin เท่านั้นที่เข้าเมนูนี้ได้"); switchScreen("home"); return; }
+    loadAndRenderActivityLog();
   }
 }
 document.querySelectorAll(".tab-btn").forEach(btn => btn.addEventListener("click", () => switchScreen(btn.dataset.screen)));
@@ -2141,6 +2254,58 @@ document.getElementById("saveSettingsBtn").addEventListener("click", async () =>
 });
 
 /* ======================================================================
+ * Activity Log (Admin only) — ประวัติ login/สร้าง/แก้ไข/ปิดงาน/แก้ตั้งค่า
+ * ====================================================================== */
+let activityLogRows = [];
+function renderActivityLogTable() {
+  const q = document.getElementById("logSearch").value.trim().toLowerCase();
+  const rows = !q ? activityLogRows : activityLogRows.filter(r =>
+    [r.UserName, r.Action, r.TargetType, r.TargetId, r.Details].some(v => String(v ?? "").toLowerCase().includes(q))
+  );
+  const container = document.getElementById("logContainer");
+  if (!rows.length) {
+    container.innerHTML = `<div class="empty">${activityLogRows.length ? "ไม่พบรายการที่ตรงกับคำค้นหา" : "ยังไม่มีประวัติการใช้งาน"}</div>`;
+    return;
+  }
+  container.innerHTML = `
+    <table class="users-table">
+      <thead><tr><th>เวลา</th><th>ผู้ทำรายการ</th><th>การกระทำ</th><th>เป้าหมาย</th><th>รายละเอียด</th></tr></thead>
+      <tbody>
+        ${rows.map(r => `<tr>
+          <td style="white-space:nowrap;">${r.Timestamp ? new Date(r.Timestamp).toLocaleString("th-TH") : "-"}</td>
+          <td>${escapeHtml(r.UserName || "-")}</td>
+          <td>${escapeHtml(r.Action || "-")}</td>
+          <td>${escapeHtml(r.TargetType || "-")}${r.TargetId ? " #" + escapeHtml(String(r.TargetId)) : ""}</td>
+          <td>${escapeHtml(r.Details || "-")}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>
+  `;
+}
+async function loadAndRenderActivityLog() {
+  const container = document.getElementById("logContainer");
+  container.innerHTML = `<div class="loading">กำลังโหลด...</div>`;
+  try {
+    activityLogRows = await SheActivityLogAPI.list();
+    renderActivityLogTable();
+  } catch (err) {
+    container.innerHTML = `<div class="empty">โหลดประวัติไม่สำเร็จ: ${escapeHtml(err.message)}</div>`;
+  }
+}
+document.getElementById("logSearch").addEventListener("input", renderActivityLogTable);
+document.getElementById("logRefreshBtn").addEventListener("click", loadAndRenderActivityLog);
+document.getElementById("logExportBtn").addEventListener("click", () => {
+  const q = document.getElementById("logSearch").value.trim().toLowerCase();
+  const rows = !q ? activityLogRows : activityLogRows.filter(r =>
+    [r.UserName, r.Action, r.TargetType, r.TargetId, r.Details].some(v => String(v ?? "").toLowerCase().includes(q))
+  );
+  if (!rows.length) { alert("ไม่มีข้อมูลให้ export ในตัวกรองนี้"); return; }
+  const headers = ["เวลา", "ผู้ทำรายการ", "การกระทำ", "ประเภทเป้าหมาย", "รหัสเป้าหมาย", "รายละเอียด"];
+  const csvRows = rows.map(r => [r.Timestamp ? new Date(r.Timestamp).toLocaleString("th-TH") : "", r.UserName, r.Action, r.TargetType, r.TargetId, r.Details]);
+  downloadCsv_(headers, csvRows, `SHE_Patrol_ActivityLog_${todayStr()}.csv`);
+});
+
+/* ======================================================================
  * Connection status — topbar chip (ทุกคนเห็น) + panel ในแท็บตั้งค่า (Admin)
  * เช็คจริงด้วย action "ping" ไม่ใช่แค่เช็คว่าตั้งค่า API_URL ไว้หรือยัง
  * ====================================================================== */
@@ -2254,6 +2419,7 @@ async function showApp() {
   if (canManageUsers()) {
     document.getElementById("adminTabBtn").style.display = "";
     document.getElementById("settingsTabBtn").style.display = "";
+    document.getElementById("logTabBtn").style.display = "";
   }
   startConnectionWatch();
   if (!SheAPI.LIVE) document.getElementById("demoFlag").style.display = "block";

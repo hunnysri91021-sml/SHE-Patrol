@@ -2,7 +2,8 @@
 
 Stack: static `index.html` (hosted on GitHub Pages) talking to a Google Apps
 Script Web App (`SHE-Patrol-AppsScript.gs`) backed by Google Sheets (Findings /
-Users / Settings tabs). No build step, no framework — plain JS in one file.
+Users / Settings / ActivityLog tabs). No build step, no framework — plain JS
+in one file.
 
 ## Deploying a `.gs` change — do not skip this
 
@@ -15,12 +16,13 @@ access to the live Google Sheet must manually:
    Version: **New version** → Deploy. (A brand-new deployment gets a new URL
    and breaks `index.html`'s hardcoded `APP_CONFIG.API_URL` — always reuse the
    existing one.)
-3. If the change added Settings keys (`DEFAULT_SETTINGS`), also re-run
-   **"SHE Patrol" → "ตั้งค่าชีต (Setup)"** from the Sheet's own menu (not the
-   Apps Script editor's Run button — that fails with `Cannot call
-   SpreadsheetApp.getUi()` because it has no spreadsheet UI context; harmless,
-   but confusing, and it means the change didn't actually take effect since it
-   was run without the necessary menu/UI context in some flows).
+3. If the change added Settings keys (`DEFAULT_SETTINGS`) or a new sheet tab
+   (e.g. `ActivityLog`), also re-run **"SHE Patrol" → "ตั้งค่าชีต (Setup)"**
+   from the Sheet's own menu (not the Apps Script editor's Run button — that
+   fails with `Cannot call SpreadsheetApp.getUi()` because it has no
+   spreadsheet UI context; harmless, but confusing, and it means the change
+   didn't actually take effect since it was run without the necessary
+   menu/UI context in some flows).
 
 index.html-only changes need no redeploy, just a page refresh.
 

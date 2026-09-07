@@ -46,6 +46,7 @@
 const FINDINGS_SHEET_NAME = "Findings";
 const USERS_SHEET_NAME = "Users";
 const SETTINGS_SHEET_NAME = "Settings";
+const LOG_SHEET_NAME = "ActivityLog";
 const PHOTOS_FOLDER_NAME = "SHE Patrol Photos";
 
 // กันเรียก API ตรง ๆ ข้าม index.html — ต้องตรงกับ APP_CONFIG.API_TOKEN ในไฟล์ index.html
@@ -59,6 +60,7 @@ const FINDINGS_HEADERS = [
   "PhotoAfterUrl", "Status", "VerifiedBy", "Rules_Confirmed_DateTime",
 ];
 const USERS_HEADERS = ["Id", "Name", "Email", "Role", "Shop", "Active", "Password"];
+const LOG_HEADERS = ["Timestamp", "UserId", "UserName", "Action", "TargetType", "TargetId", "Details"];
 
 const STATUS_OPEN = ["เปิดใหม่", "รอดำเนินการ", "ดำเนินการแล้ว", "รอตรวจสอบ"];
 
@@ -136,6 +138,15 @@ function setupSheet() {
   settingsSheet.getRange(1, 1, 1, 3).setFontWeight("bold");
   settingsSheet.setFrozenRows(1);
   settingsSheet.autoResizeColumns(1, 3);
+
+  let logSheet = ss.getSheetByName(LOG_SHEET_NAME);
+  if (!logSheet) logSheet = ss.insertSheet(LOG_SHEET_NAME);
+  // เก็บ Timestamp เป็นข้อความล้วน (ISO string) กัน Sheets auto-parse เป็น Date แล้วรูปแบบเพี้ยน
+  // เหมือนคอลัมน์วันที่ใน Findings — เรียงตามข้อความ ISO ได้ผลเหมือนเรียงตามเวลาจริงอยู่แล้ว
+  logSheet.getRange(1, 1, 2000, 1).setNumberFormat("@");
+  logSheet.getRange(1, 1, 1, LOG_HEADERS.length).setValues([LOG_HEADERS]).setFontWeight("bold");
+  logSheet.setFrozenRows(1);
+  logSheet.autoResizeColumns(1, LOG_HEADERS.length);
 
   SpreadsheetApp.getUi().alert("ตั้งค่าชีตเรียบร้อย — ไปกรอกอีเมลในแท็บ Settings แล้วเพิ่ม Admin คนแรกในแท็บ Users ต่อได้เลย");
 }
@@ -240,9 +251,10 @@ function ping_() {
   return { status: "ok", serverTime: new Date().toISOString() };
 }
 
-function updateSettings_(values) {
+function updateSettings_(values, actingUser) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
+  const changedParts = [];
   try {
     const sheet = getSheet_(SETTINGS_SHEET_NAME);
     const lastRow = sheet.getLastRow();
@@ -250,12 +262,17 @@ function updateSettings_(values) {
     const keys = sheet.getRange(2, 1, lastRow - 1, 1).getValues().flat();
     Object.keys(values || {}).forEach(k => {
       const idx = keys.indexOf(k);
-      if (idx !== -1) sheet.getRange(idx + 2, 2).setValue(values[k]);
+      if (idx === -1) return;
+      const before = sheet.getRange(idx + 2, 2).getValue();
+      if (String(before) === String(values[k])) return;
+      sheet.getRange(idx + 2, 2).setValue(values[k]);
+      changedParts.push(`${k}: "${before}" → "${values[k]}"`);
     });
-    return listSettings_();
   } finally {
     lock.releaseLock();
   }
+  if (changedParts.length) logActivity_(actingUser, "แก้ไขตั้งค่า", "Settings", "", changedParts.join(" | "));
+  return listSettings_();
 }
 
 // ---------------------------------------------------------------
@@ -295,24 +312,27 @@ function doPost(e) {
       case "getFinding": return jsonResponse({ ok: true, data: getFinding_(data.id) });
       case "createFinding":
         requireRole_(sessionUser, ["admin", "auditor"]);
-        return jsonResponse({ ok: true, data: createFinding_(data.fields || {}, data.photos) });
+        return jsonResponse({ ok: true, data: createFinding_(data.fields || {}, data.photos, sessionUser) });
       case "updateFinding":
         requireCanEditFinding_(sessionUser, data.id, data.fields || {});
-        return jsonResponse({ ok: true, data: updateFinding_(data.id, data.fields || {}, data.photos) });
+        return jsonResponse({ ok: true, data: updateFinding_(data.id, data.fields || {}, data.photos, sessionUser) });
       case "listUsers": return jsonResponse({ ok: true, data: listUsers_() });
       case "createUser":
         requireRole_(sessionUser, ["admin"]);
-        return jsonResponse({ ok: true, data: createUser_(data.fields || {}) });
+        return jsonResponse({ ok: true, data: createUser_(data.fields || {}, sessionUser) });
       case "updateUser":
         requireRole_(sessionUser, ["admin"]);
-        return jsonResponse({ ok: true, data: updateUser_(data.id, data.fields || {}) });
+        return jsonResponse({ ok: true, data: updateUser_(data.id, data.fields || {}, sessionUser) });
       case "login": return jsonResponse({ ok: true, data: login_(data.id, data.password) });
       case "loginOptions": return jsonResponse({ ok: true, data: loginOptions_() });
       case "uploadPhoto": return jsonResponse({ ok: true, data: uploadPhoto_(data.findingId, data.stage, data.fileName, data.contentBase64) });
       case "listSettings": return jsonResponse({ ok: true, data: listSettings_() });
       case "updateSettings":
         requireRole_(sessionUser, ["admin"]);
-        return jsonResponse({ ok: true, data: updateSettings_(data.values || {}) });
+        return jsonResponse({ ok: true, data: updateSettings_(data.values || {}, sessionUser) });
+      case "listActivityLog":
+        requireRole_(sessionUser, ["admin"]);
+        return jsonResponse({ ok: true, data: listActivityLog_() });
       case "ping": return jsonResponse({ ok: true, data: ping_() });
       default: return jsonResponse({ ok: false, error: "ไม่รู้จัก action: " + data.action });
     }
@@ -370,6 +390,69 @@ function nextId_(sheetName, headers) {
 }
 
 // ---------------------------------------------------------------
+// Activity Log — บันทึกทุกครั้งที่มี login/สร้าง/แก้ไข/ลบ เพื่อตรวจสอบย้อนหลังได้ว่า
+// ใครทำอะไรกับข้อมูลไหน เมื่อไหร่ — เขียนนอก LockService lock ของ action หลักเสมอ (กัน
+// เพิ่ม log ช้าไปถ่วงเวลา request หลัก) และห่อ try/catch ไว้เสมอ (log พังต้องไม่ทำให้
+// action หลักที่ผู้ใช้กำลังรออยู่พังตาม เช่นกรณีชีตยังไม่ได้รัน setupSheet() เวอร์ชันใหม่)
+// ---------------------------------------------------------------
+function logActivity_(user, action, targetType, targetId, details) {
+  try {
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(LOG_SHEET_NAME);
+    if (!sheet) return;
+    sheet.appendRow([
+      new Date().toISOString(),
+      user ? user.Id : "",
+      user ? user.Name : "",
+      action,
+      targetType || "",
+      targetId !== undefined && targetId !== null ? targetId : "",
+      details || "",
+    ]);
+  } catch (err) {
+    // เงียบไว้ — ดู log ไม่ได้ยังดีกว่า action หลักใช้งานไม่ได้
+  }
+}
+
+// เทียบค่าเดิม/ใหม่เฉพาะ key ที่ถูกส่งมาแก้ (ไม่ใช่ทั้งแถว) แล้วคืนข้อความสรุปแบบ
+// "field: เดิม → ใหม่" คั่นด้วย " | " — ใช้กับทั้ง Finding/User/Settings เพราะโครงสร้างเหมือนกัน
+function diffText_(before, after, keys, redactKeys) {
+  const redact = redactKeys || [];
+  const parts = [];
+  keys.forEach(k => {
+    const b = before[k] === undefined || before[k] === null ? "" : before[k];
+    const a = after[k] === undefined || after[k] === null ? "" : after[k];
+    if (String(b) === String(a)) return;
+    if (redact.indexOf(k) !== -1) { parts.push(`${k}: (เปลี่ยนแล้ว)`); return; }
+    parts.push(`${k}: "${b}" → "${a}"`);
+  });
+  return parts.join(" | ");
+}
+
+// เลือก action label ให้อ่านง่ายตามฟิลด์ที่แก้ — ปิดงาน/เปลี่ยนสถานะ/แก้ข้อมูลรายการ/แก้ความคืบหน้า
+function findingActionLabel_(fields) {
+  const detailFields = ["TypeOfAudit", "PatrolDate", "Shop", "Place", "Description", "Grade", "Category"];
+  if (fields.Status === "ปิดงาน") return "ปิดงาน";
+  if (fields.Status) return "เปลี่ยนสถานะ";
+  if (Object.keys(fields).some(k => detailFields.includes(k))) return "แก้ไขข้อมูลรายการ";
+  return "แก้ไขความคืบหน้า";
+}
+
+function listActivityLog_() {
+  // ไม่ใช้ readAllRows_() เพราะฟังก์ชันนั้น filter แถวว่างด้วยคอลัมน์ "Id" ซึ่งชีต Log
+  // ไม่มี (คอลัมน์แรกคือ Timestamp) — อ่านตรงแล้ว filter ด้วย Timestamp แทน
+  const sheet = getSheet_(LOG_SHEET_NAME);
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return [];
+  const rows = sheet.getRange(2, 1, lastRow - 1, LOG_HEADERS.length).getValues()
+    .map(row => rowToObject_(LOG_HEADERS, row))
+    .filter(r => r.Timestamp !== "" && r.Timestamp !== null && r.Timestamp !== undefined);
+  // ใหม่สุดก่อน — เรียงตาม Timestamp (ISO string เรียงเป็นลำดับเวลาได้ตรงอยู่แล้ว)
+  rows.sort((a, b) => String(b.Timestamp).localeCompare(String(a.Timestamp)));
+  // จำกัดจำนวนแถวที่ส่งกลับ กันชีต log โตมากแล้ว payload ใหญ่/ช้าเกินไป
+  return rows.slice(0, 1000);
+}
+
+// ---------------------------------------------------------------
 // Findings CRUD
 // ---------------------------------------------------------------
 function listFindings_() {
@@ -382,7 +465,7 @@ function getFinding_(id) {
   return row;
 }
 
-function createFinding_(fields, photos) {
+function createFinding_(fields, photos, actingUser) {
   // อัปโหลดรูปก่อนเข้า lock (ถ้ามี) — รวมสร้างรายการ + แนบรูป (ได้หลายรูป) เป็นคำขอเดียว
   // แทนที่จะสร้างก่อนแล้วค่อยยิงอีกรอบเพื่อแนบรูป (ลด round-trip ไป Apps Script จาก 3 ครั้งเหลือ 1)
   if (photos && photos.length) {
@@ -402,27 +485,31 @@ function createFinding_(fields, photos) {
   } finally {
     lock.releaseLock();
   }
-  // ส่งอีเมลนอก lock — กันคนอื่นที่กำลังจะบันทึกพร้อมกันต้องรอจนกว่าอีเมลจะส่งเสร็จ
+  // ส่งอีเมล/บันทึก log นอก lock — กันคนอื่นที่กำลังจะบันทึกพร้อมกันต้องรอ
   notifyNewFinding_(record);
+  logActivity_(actingUser, "สร้างรายการใหม่", "Finding", record.Id, `${record.Shop} · ${record.Place || "-"} · Grade ${record.Grade}`);
   return record;
 }
 
-function updateFinding_(id, fields, photos) {
+function updateFinding_(id, fields, photos, actingUser) {
   // เช่นเดียวกับ createFinding_ — อัปโหลดรูป (ได้หลายรูป) ก่อนเข้า lock แล้วรวมเป็นคำขอเดียว
   // รูปใหม่จะ "ต่อท้าย" รูปเดิมของรายการ (คั่นด้วยจุลภาคในคอลัมน์เดียวกัน) ไม่ใช่แทนที่ —
   // เลยต้องอ่านค่าปัจจุบันก่อน (นอก lock เพื่อไม่ให้ยึด lock ไว้นานระหว่างอัปโหลดรูปที่ช้ากว่า)
   const beforeList = photos && photos.before ? photos.before : [];
   const afterList = photos && photos.after ? photos.after : [];
+  const photoNote = [];
   if (beforeList.length || afterList.length) {
     fields = Object.assign({}, fields);
     const current = getFinding_(id);
     if (beforeList.length) {
       const newUrls = uploadPhotoFiles_("ก่อนแก้ไข", beforeList);
       fields.PhotoBeforeUrl = [current.PhotoBeforeUrl, newUrls].filter(Boolean).join(",");
+      photoNote.push(`แนบรูปก่อนแก้ไขเพิ่ม ${beforeList.length} รูป`);
     }
     if (afterList.length) {
       const newUrls = uploadPhotoFiles_("หลังแก้ไข", afterList);
       fields.PhotoAfterUrl = [current.PhotoAfterUrl, newUrls].filter(Boolean).join(",");
+      photoNote.push(`แนบรูปหลังแก้ไขเพิ่ม ${afterList.length} รูป`);
     }
   }
   const lock = LockService.getScriptLock();
@@ -439,8 +526,11 @@ function updateFinding_(id, fields, photos) {
   } finally {
     lock.releaseLock();
   }
-  // ส่งอีเมลนอก lock — กันคนอื่นที่กำลังจะบันทึกพร้อมกันต้องรอจนกว่าอีเมลจะส่งเสร็จ
+  // ส่งอีเมล/บันทึก log นอก lock — กันคนอื่นที่กำลังจะบันทึกพร้อมกันต้องรอ
   notifyFindingStatusChange_(before, after);
+  const changedKeys = FINDINGS_HEADERS.filter(h => h !== "PhotoBeforeUrl" && h !== "PhotoAfterUrl" && Object.prototype.hasOwnProperty.call(fields, h));
+  const details = [diffText_(before, after, changedKeys), ...photoNote].filter(Boolean).join(" | ");
+  logActivity_(actingUser, findingActionLabel_(fields), "Finding", id, details);
   return after;
 }
 
@@ -552,42 +642,49 @@ function login_(id, password) {
   if (hashPassword_(password) !== row.Password) throw new Error("รหัสผ่านไม่ถูกต้อง");
   const user = sanitizeUser_(row);
   user.SessionToken = issueSessionToken_(user.Id);
+  logActivity_(user, "เข้าสู่ระบบ", "User", user.Id, "");
   return user;
 }
 
-function createUser_(fields) {
+function createUser_(fields, actingUser) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
+  let record;
   try {
     const id = nextId_(USERS_SHEET_NAME, USERS_HEADERS);
-    const record = Object.assign({ Id: id, Active: true, Shop: "", Password: "" }, fields, { Id: id });
+    record = Object.assign({ Id: id, Active: true, Shop: "", Password: "" }, fields, { Id: id });
     if (record.Password) record.Password = hashPassword_(record.Password);
     const row = USERS_HEADERS.map(h => (record[h] !== undefined && record[h] !== null) ? record[h] : "");
     getSheet_(USERS_SHEET_NAME).appendRow(row);
-    return sanitizeUser_(record);
   } finally {
     lock.releaseLock();
   }
+  logActivity_(actingUser, "เพิ่มผู้ใช้งาน", "User", record.Id, `${record.Name || "-"} · ${record.Role || "-"}`);
+  return sanitizeUser_(record);
 }
 
-function updateUser_(id, fields) {
+function updateUser_(id, fields, actingUser) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
+  let before, after, patch;
   try {
     const rowNum = findRowNumberById_(USERS_SHEET_NAME, USERS_HEADERS, id);
     if (rowNum === -1) throw new Error("ไม่พบผู้ใช้งานรหัส " + id);
     const sheet = getSheet_(USERS_SHEET_NAME);
-    const before = rowToObject_(USERS_HEADERS, sheet.getRange(rowNum, 1, 1, USERS_HEADERS.length).getValues()[0]);
-    const patch = Object.assign({}, fields);
+    before = rowToObject_(USERS_HEADERS, sheet.getRange(rowNum, 1, 1, USERS_HEADERS.length).getValues()[0]);
+    patch = Object.assign({}, fields);
     if (patch.Password) patch.Password = hashPassword_(patch.Password);
     else delete patch.Password; // เว้นว่าง = ไม่เปลี่ยนรหัสผ่านเดิม
-    const after = Object.assign({}, before, patch, { Id: before.Id });
+    after = Object.assign({}, before, patch, { Id: before.Id });
     const row = USERS_HEADERS.map(h => (after[h] !== undefined && after[h] !== null) ? after[h] : "");
     sheet.getRange(rowNum, 1, 1, USERS_HEADERS.length).setValues([row]);
-    return sanitizeUser_(after);
   } finally {
     lock.releaseLock();
   }
+  const changedKeys = USERS_HEADERS.filter(h => Object.prototype.hasOwnProperty.call(patch, h));
+  const details = diffText_(before, after, changedKeys, ["Password"]);
+  logActivity_(actingUser, "แก้ไขผู้ใช้งาน", "User", id, details);
+  return sanitizeUser_(after);
 }
 
 // ---------------------------------------------------------------
